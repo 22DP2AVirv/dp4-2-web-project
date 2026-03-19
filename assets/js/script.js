@@ -1,65 +1,67 @@
-const toggleButton = document.getElementById('dark-mode-btn');
+const DARK_MODE_KEY = "darkMode";
 
-// Funkcija, lai iestatītu režīmu
 function setDarkMode(isDark) {
-    if (isDark) {
-        document.body.classList.add('dark-mode');
-        toggleButton.textContent = 'Gaišais režīms';
-        localStorage.setItem('darkMode', 'enabled');
-    } else {
-        document.body.classList.remove('dark-mode');
-        toggleButton.textContent = 'Tumsas režīms';
-        localStorage.setItem('darkMode', 'disabled');
+    document.body.classList.toggle("dark-mode", isDark);
+
+    const toggleButton = document.getElementById("dark-mode-btn");
+    if (toggleButton) {
+        toggleButton.textContent = isDark ? "Gaišais režīms" : "Tumsas režīms";
+    }
+
+    localStorage.setItem(DARK_MODE_KEY, isDark ? "enabled" : "disabled");
+}
+
+function toggleMenu() {
+    const menu = document.querySelector(".navbar .menu");
+    if (menu) {
+        menu.classList.toggle("active");
     }
 }
 
-// Ielādējot lapu, pārbauda localStorage
-document.addEventListener("DOMContentLoaded", function () {
-    const darkModeStatus = localStorage.getItem('darkMode');
-    setDarkMode(darkModeStatus === 'enabled');
-    
-    // Carousel (ja nepieciešams)
+function showWorkTime() {
+    const modal = document.getElementById("workTimeModal");
+    if (modal) {
+        modal.style.display = "block";
+    }
+}
+
+function closeWorkTime() {
+    const modal = document.getElementById("workTimeModal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+}
+
+window.toggleMenu = toggleMenu;
+window.showWorkTime = showWorkTime;
+window.closeWorkTime = closeWorkTime;
+
+document.addEventListener("DOMContentLoaded", () => {
+    const darkModeStatus = localStorage.getItem(DARK_MODE_KEY);
+    setDarkMode(darkModeStatus === "enabled");
+
+    const toggleButton = document.getElementById("dark-mode-btn");
+    if (toggleButton) {
+        toggleButton.addEventListener("click", () => {
+            const isDark = !document.body.classList.contains("dark-mode");
+            setDarkMode(isDark);
+        });
+    }
+
     const carousel = document.querySelector("#main-slider");
-    if (carousel) {
+    if (carousel && window.bootstrap && window.bootstrap.Carousel) {
         new bootstrap.Carousel(carousel, {
             interval: 3000,
             ride: "carousel"
         });
     }
 
-    // Formas pāradresācija (ja ir forma)
-    const form = document.querySelector('form');
-    if (form) {
-        form.addEventListener('submit', function(event) {
+    const form = document.querySelector("form");
+    if (form && !["appointmentForm", "registrationForm", "loginForm"].includes(form.id)) {
+        form.addEventListener("submit", (event) => {
             event.preventDefault();
-            window.location.href = "index.html";
+            alert("Paldies! Mēs ar jums drīz sazināsimies.");
+            form.reset();
         });
     }
 });
-
-// Kad klikšķina uz pogas
-toggleButton.addEventListener('click', () => {
-    const isDark = !document.body.classList.contains('dark-mode');
-    setDarkMode(isDark);
-});
-
-
-document.addEventListener("DOMContentLoaded", function () {
-    let myCarousel = new bootstrap.Carousel(document.querySelector("#main-slider"), {
-        interval: 3000,
-        ride: "carousel"
-    });
-});
-
-document.querySelector('form').addEventListener('submit', function(event) {
-    event.preventDefault();  // Novērst veidlapas noklusējuma iesniegšanu
-    window.location.href = "index.html";  // Pāradresēt uz index.html
-});
-
-function showWorkTime() {
-    document.getElementById("workTimeModal").style.display = "block";
-}
-
-function closeWorkTime() {
-    document.getElementById("workTimeModal").style.display = "none";
-}

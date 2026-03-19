@@ -6,30 +6,15 @@
     <title>Administratora panelis</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/admin-style.css">
-    <script>
-        // Pārbaudīt, vai lietotājs ir autorizējies, ja nav, novirzīt uz login lapu
-        function checkLogin() {
-            const isLoggedIn = localStorage.getItem('isLoggedIn');
-
-            if (!isLoggedIn || isLoggedIn !== 'true') {
-                // Ja nav autorizējies, novirzīt uz login lapu
-                window.location.href = 'pieteikumi-adm.html';
-            }
-        }
-
-        // Saukt checkLogin funkciju, kad lapa tiek ielādēta
-        window.onload = checkLogin;
-    </script>
 </head>
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sānu izvēlne -->
             <div class="col-md-3 sidebar">
                 <h2>Admin Panelis</h2>
                 <ul class="nav flex-column">
                     <li class="nav-item">
-                        <a class="nav-link active" href="admin-panel.html">Lietotāji</a>
+                        <a class="nav-link active" href="admin-panel.html">Lietotaji</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="admin-panel.html">Pakalpojumi</a>
@@ -38,7 +23,7 @@
                         <a class="nav-link" href="admin-panel.html">Cenas</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="admin-panel.html">Satura pārvaldība</a>
+                        <a class="nav-link" href="admin-panel.html">Satura parvaldiba</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="admin-panel.html">Statistika</a>
@@ -51,78 +36,34 @@
                     </li>
                 </ul>
             </div>
+
             <div class="col-md-9">
-            <h1>Pieteikumu saraksts</h1>
+                <h1>Pieteikumu saraksts</h1>
                 <table class="table">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Vārds</th>
-                            <th>Uzvārds</th>
-                            <th>Tālrunis</th>
+                            <th>Vards</th>
+                            <th>Uzvards</th>
+                            <th>Talrunis</th>
                             <th>Epasts</th>
                             <th>Procedura</th>
-                            <th>Vēlamais datums</th>
-                            <th>Vēlamais laiks</th>
+                            <th>Velamais datums</th>
+                            <th>Velamais laiks</th>
                             <th>Adrese</th>
-                            <th>Aizpildīšanas datums</th>
-                            <th>Izmaiņu datums</th>
-                            <th>Komentārs</th>
-                            <th>Rediģēt</th>
-                            
+                            <th>Aizpildisanas datums</th>
+                            <th>Izmainu datums</th>
+                            <th>Komentars</th>
+                            <th>Darbibas</th>
                         </tr>
                     </thead>
-                    <tbody id="appointmentList">
-                        <!-- Pieteikumu dati -->
-                    </tbody>
+                    <tbody id="appointmentList"></tbody>
                 </table>
             </div>
         </div>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-        // Funkcija izlogoties
-            function logout() {
-                // Izdzēst pieteikšanās statusu no localStorage
-                localStorage.removeItem('isLoggedIn');
-                window.location.href = 'pieteikumi-adm.html'; // Atgriežas uz login lapu
-            }
-
-            const dateOnly = (datetime) => new Date(datetime).toISOString().split('T')[0];
-            const formatLatvianDateTime = (datetime) => {
-            const date = new Date(datetime);
-            date.setHours(date.getHours() + 3); // Pieliekam 3 stundas
-            return date.toISOString().replace("T", " ").slice(0, 19);
-            };
-
-
-            fetch('/api/pieteikties')
-            .then(res => res.json())
-            .then(data => {
-                const appointmentList = document.getElementById('appointmentList');
-                appointmentList.innerHTML = '';
-                data.forEach((a, i) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${i + 1}</td>
-                        <td>${a.name}</td>
-                        <td>${a.surname}</td>
-                        <td>${a.phone}</td>
-                        <td>${a.email}</td>
-                        <td>${a.procedura}</td>
-                        <td>${dateOnly(a.datums)}</td>
-                        <td>${a.laiks}</td>
-                        <td>${a.adrese || ''}</td>
-                        <td>${formatLatvianDateTime (a.create_data)}</td>
-                        <td>${a.modified_data || ''}</td>
-                        <td>${a.comment || ''}</td>
-                        <td><button class="btn btn-danger">Rediģēt</button></td>
-                    `;
-                    appointmentList.appendChild(row);
-                });
-            });
-        });
-    </script>
+    <script src="/assets/js/admin.js"></script>
 </body>
 </html>

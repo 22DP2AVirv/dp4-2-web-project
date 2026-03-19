@@ -1,25 +1,38 @@
-// admin-login.js
-document.addEventListener('DOMContentLoaded', () => {
-    const correctLogin = "aleksisvirvinskis204@gmail.com"; // Pareizais login (epasts)
-    const correctPassword = "Parole290306"; // Pareizā parole
-    const loginForm = document.getElementById('loginForm');
-    const loginInput = document.getElementById('login');
-    const passwordInput = document.getElementById('password');
-    const errorMessage = document.getElementById('error');
+document.addEventListener("DOMContentLoaded", () => {
+    const loginForm = document.getElementById("loginForm");
+    const loginInput = document.getElementById("login");
+    const passwordInput = document.getElementById("password");
+    const errorMessage = document.getElementById("error");
 
-    loginForm.addEventListener('submit', (event) => {
-        event.preventDefault(); // Novērš lapas pārlādēšanu
+    if (!loginForm) {
+        return;
+    }
 
-        const enteredLogin = loginInput.value;
-        const enteredPassword = passwordInput.value;
+    loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorMessage.style.display = "none";
 
-        if (enteredLogin === correctLogin && enteredPassword === correctPassword) {
-            // Ja login un parole ir pareizi, saglabājam statusu localStorage un novirzam uz admin paneli
-            localStorage.setItem('isLoggedIn', 'true'); // Saglabājam pieteikšanās statusu
-            window.location.href = 'admin-panel.html'; // Atceries mainīt uz savu admin paneli
-        } else {
-            // Ja login vai parole ir nepareizi, parāda kļūdas ziņojumu
-            errorMessage.style.display = 'block';
+        try {
+            const response = await fetch("/api/admin/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    email: loginInput.value.trim(),
+                    password: passwordInput.value
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Neizdevas pieslegties admin panelim.");
+            }
+
+            window.location.href = "admin-panel.html";
+        } catch (error) {
+            errorMessage.textContent = error.message;
+            errorMessage.style.display = "block";
         }
     });
 });

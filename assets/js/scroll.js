@@ -1,16 +1,10 @@
-console.log("JavaScript подключен и работает!");
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
     const header = document.querySelector("header");
+    if (!header) {
+        return;
+    }
 
-    window.addEventListener("scroll", function () {
-        console.log("Позиция прокрутки:", window.scrollY); // Проверяем, срабатывает ли скрипт
-
-        if (window.scrollY > 30) {  
-            header.classList.add("sticky-active");
-            console.log("Добавлен класс sticky-active"); // Проверка в консоли
-        } else {
-            header.classList.remove("sticky-active");
-            console.log("Удалён класс sticky-active"); // Проверка в консоли
-        }
+    window.addEventListener("scroll", () => {
+        header.classList.toggle("sticky-active", window.scrollY > 30);
     });
 });

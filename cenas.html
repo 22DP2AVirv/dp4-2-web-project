@@ -9,21 +9,24 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/fontawesome.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/brands.min.css" rel="stylesheet">
-    <link href="/assets/awesome/css/solid.css" rel="stylesheet"> 
+    <link href="/assets/awesome/css/solid.css" rel="stylesheet">
     <style>
         .container {
             max-width: 900px;
             margin-top: 50px;
         }
+
         .section-title {
             text-align: center;
             border-bottom: 2px solid #000;
             width: 400px;
-            margin: 0px auto 30px;
+            margin: 0 auto 30px;
         }
+
         .service-list {
             margin-bottom: 40px;
         }
+
         .service-item {
             padding: 15px;
             margin: 10px 0;
@@ -35,11 +38,9 @@
         .service-price {
             float: right;
         }
-        
     </style>
 </head>
 <body>
-
     <header>
         <div class="container-md">
             <div class="navbar">
@@ -48,17 +49,17 @@
                 </span>
                 <div class="dark-mode-toggle">
                     <button id="registracija" onclick="window.location.href='registracija.html'">Reģistrācija</button>
-                    <button id="dark-mode-btn">Dark Mode</button>        
+                    <button id="dark-mode-btn">Tumsas režīms</button>
                 </div>
                 <div class="menu">
                     <li class="nav-item">
-                        <a href="index.html"><i class="fa-solid fa-house"></i>Sākums </a>
+                        <a href="index.html"><i class="fa-solid fa-house"></i>Sākums</a>
                     </li>
                     <li>
-                        <a href="parmums.html"><i class="fas fa-info-circle"></i>Par mums </a>
+                        <a href="parmums.html"><i class="fas fa-info-circle"></i>Par mums</a>
                     </li>
-                        <div class="dropdown">
-                            <a href="#"><i class="fas fa-caret-down"></i>Izvēlne </a>
+                    <div class="dropdown">
+                        <a href="#"><i class="fas fa-caret-down"></i>Izvēlne</a>
                         <div class="dropdown-content">
                             <li class="nav-item">
                                 <a class="nav-link" href="cenas.html">Cenas</a>
@@ -67,7 +68,7 @@
                         </div>
                     </div>
                     <li>
-                        <a href="kontakti.html"><i class="fas fa-envelope"></i>Kontakti </a>
+                        <a href="kontakti.html"><i class="fas fa-envelope"></i>Kontakti</a>
                     </li>
                 </div>
                 <div class="hamburger" onclick="toggleMenu()">
@@ -77,180 +78,9 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <div class="container">
         <h2 class="section-title">PAKALPOJUMU CENAS</h2>
-
-        <!-- Datortomogrāfija -->
-        <div class="service-list">
-            <h4 id="dat_title">Datortomogrāfija</h4>
-            <div class="service-item">
-                <strong id="dat_desc">Vienas ķermeņa daļas daudzslāņu CT izmeklējums bez kontrastvielas:</strong> 
-                <span id="dat_price" class="service-price">110.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">Plaušu CT izmeklējums:</strong> 
-                <span id="dat_price" class="service-price">110.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">Galvas, deguna blakusdobumu vai muskuloskeletālās sistēmas CT izmeklējums ar i/v kontrastēšanu:</strong> 
-                <span id="dat_price" class="service-price">125.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT izmeklējums krūšu kurvja orgāniem ar i/v kontrastēšanu:</strong> 
-                <span id="dat_price" class="service-price">175.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT izmeklējums vēdera dobumam un retroperitoneālai telpai ar i/v kontrastēšanu:</strong> 
-                <span id="dat_price" class="service-price">200.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija nieru artērijām:</strong> 
-                <span id="dat_price" class="service-price">180.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija vēdera aortai un kāju asinsvadiem:</strong> 
-                <span id="dat_price" class="service-price">180.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija vēdera aortai un tās zariem:</strong>
-                <span id="dat_price" class="service-price">180.00 €</span>  
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija aortas lokam un roku asinsvadiem:</strong>
-                <span id="dat_price" class="service-price">180.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija brahiocefālajiem asinsvadiem:</strong>
-                <span id="dat_price" class="service-price">180.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT angiogrāfija krūšu un vēdera aortai:</strong>
-                <span id="dat_price" class="service-price">180.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT sirdij, sirds asinsvadiem vai krūšu kurvja aortai sirdsdarbības kontroles režīmā:</strong>
-                <span id="dat_price" class="service-price">200.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">Kontrastviela 50 ml CT izmeklējumiem (Ultravist, Iopamiro, Iohexolo):</strong>
-                <span id="dat_price" class="service-price">37.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">Kontrastviela 100 ml CT izmeklējumiem (Ultravist, Iopamiro, Iohexolo):</strong>
-                <span id="dat_price" class="service-price">40.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT kaulu traumas vai lūzuma kontrolei (bez apraksta):</strong>
-                <span id="dat_price" class="service-price">38.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT vienai ķermeņa daļai bez kontrastēšanas (bez apraksta):</strong>
-                <span id="dat_price" class="service-price">75.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="dat_desc">CT vēdera dobumam un mazajam iegurnim bez kontrastēšanas:</strong>
-                <span id="dat_price" class="service-price">110.00 €</span>
-            </div>
-        </div>
-
-        <!-- Ģimenes ārsts -->
-        <div class="service-list">
-            <h4 id="gim_title">Ģimenes ārsts</h4>
-            <div class="service-item">
-                <strong id="gim_desc">Apmeklējums filiālē:</strong>
-                <span id="gim_price" class="service-price">2.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="gim_desc">Apmeklējums mājās:</strong>
-                <span id="gim_price" class="service-price">10.00 €</span>
-            </div>
-        </div>
-
-        <!-- Vakcinācija -->
-        <div class="service-list">
-            <h4 id="vakc_title">Vakcinācija</h4>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret gripu:</strong>
-                <span id="vakc_price" class="service-price">22.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret pneimokoku:</strong>
-                <span id="vakc_price" class="service-price">100.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret ērču encefalītu (TICOVAC):</strong>
-                <span id="vakc_price" class="service-price">40.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret ērču encefalītu bērniem (TICOVAC):</strong>
-                <span id="vakc_price" class="service-price">34.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret vīrushepatītu A (HAVRIX):</strong>
-                <span id="vakc_price" class="service-price">60.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret vīrushepatītu B (ENGERIX):</strong>
-                <span id="vakc_price" class="service-price">45.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret vīrushepatītu A un B (TWINRIX):</strong>
-                <span id="vakc_price" class="service-price">90.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret dzelteno drudzi (STAMARIL):</strong>
-                <span id="vakc_price" class="service-price">70.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret vēdertīfu (Typhim Vi):</strong>
-                <span id="vakc_price" class="service-price">55.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret masalām, masaliņām un parotītu M-M-RVAXPro:</strong>
-                <span id="vakc_price" class="service-price">30.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Dzeltenā drudža sertifikāts:</strong>
-                <span id="vakc_price" class="service-price">3.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret trakumsērgu (VERORAB):</strong>
-                <span id="vakc_price" class="service-price">66.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret difteriju, stinguma krampjiem un garo klepu (ADACEL):</strong>
-                <span id="vakc_price" class="service-price">47.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret vīrushepatītu A (AVAXIM):</strong>
-                <span id="vakc_price" class="service-price">60.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret difteriju, stinguma krampjiem, poliomielītu (DULTAVAX):</strong>
-                <span id="vakc_price" class="service-price">30.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Piesūkušās ērces noņemšana un koduma vietas apstrāde:</strong>
-                <span id="vakc_price" class="service-price">10.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Dzeltenā drudža sertifikāta dublikāta izsniegšana:</strong>
-                <span id="vakc_price" class="service-price">10.00 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcīna pret dzemdes kakla vēzi Gardasil 9:</strong>
-                <span id="vakc_price" class="service-price">190.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret meningokoku (Nimenrix):</strong>
-                <span id="vakc_price" class="service-price">80.50 €</span>
-            </div>
-            <div class="service-item">
-                <strong id="vakc_desc">Vakcinācija pret holēru (DUKORAL):</strong>
-                <span id="vakc_price" class="service-price">60.50 €</span>
-            </div>
-        </div>
+        <div id="priceCatalog"></div>
     </div>
 
     <footer class="footer">
@@ -289,7 +119,7 @@
                         <button class="price">Cenas</button>
                     </a>
                     <a href="privatuma-politika.html">
-                    <button class="privacy">Privātuma politika</button>
+                        <button class="privacy">Privātuma politika</button>
                     </a>
                     <a href="registracija.html">
                         <button class="Logins">Log in / Sign up</button>
@@ -311,5 +141,6 @@
 
     <script src="/assets/js/script.js"></script>
     <script src="/assets/js/scroll.js"></script>
+    <script src="/assets/js/cenas.js"></script>
 </body>
 </html>
