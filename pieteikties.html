@@ -134,12 +134,19 @@
                 <option value="gimenesArsts">Ģimenes ārsts</option>
                 <option value="vakcinacija">Vakcinācija</option>
             </select>
+
+            <label for="arstId">Ārsts</label>
+            <select class="form-control" id="arstId" required disabled>
+                <option value="" selected disabled>Vispirms izvēlieties procedūru*</option>
+            </select>
         
             <label for="velamaisDatums">Vēlamais datums</label>
             <input type="date" class="form-control" id="velamaisDatums" required>
         
             <label for="velamaisLaiks">Vēlamais laiks</label>
-            <input type="time" class="form-control" id="velamaisLaiks" required>
+            <select class="form-control" id="velamaisLaiks" required>
+                <option value="" disabled selected>Izvēlieties laiku*</option>
+            </select>
         
             <div id="gimenesArstsOptions" style="display: none;">
                 <label for="kurNotiks">Kur notiks Jūsu procedūra?*</label>

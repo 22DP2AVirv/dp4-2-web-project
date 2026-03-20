@@ -5,7 +5,8 @@ import os
 import re
 import sqlite3
 import unicodedata
-from datetime import datetime
+import calendar
+from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -27,8 +28,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "app.db"
 HTML_PAGES = {path.name for path in BASE_DIR.glob("*.html")}
-USER_ONLY_PAGES = {"user_cab.html"}
+ACCOUNT_ONLY_PAGES = {"user_cab.html", "pieteikties.html"}
+PATIENT_ONLY_PAGES = {"pieteikties.html"}
 ADMIN_ONLY_PAGES = {"admin-panel.html", "pieteikumi-adm.html"}
+DOCTOR_PROCEDURES = {"datortomografija", "gimenesArsts", "vakcinacija"}
+DOCTOR_APPOINTMENT_MESSAGE = "Ārsta kontam procedūru pieteikšana nav pieejama."
 
 SERVICE_DESCRIPTION_MAP = {
     "Datortomogrāfija": "Ātra un precīza diagnostika ar augstas izšķirtspējas attēliem. Palīdz noteikt dažādas saslimšanas un kontrolēt ārstēšanas gaitu.",
@@ -71,6 +75,257 @@ app.config["ADMIN_PASSWORD"] = os.environ.get(
 
 def now_iso() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
+
+
+def add_months(source_date: date, months: int) -> date:
+    month_index = source_date.month - 1 + months
+    year = source_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(source_date.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def get_working_hours_for_date(target_date: date) -> tuple[int, int] | None:
+    weekday = target_date.weekday()
+    if weekday <= 4:
+        return (9 * 60, 21 * 60)
+    if weekday == 5:
+        return (10 * 60, 20 * 60)
+    return None
+
+
+def validate_appointment_schedule(datums: str, laiks: str) -> str | None:
+    try:
+        appointment_date = datetime.strptime(datums, "%Y-%m-%d").date()
+    except ValueError:
+        return "Lūdzu izvēlieties korektu datumu."
+
+    try:
+        appointment_time = datetime.strptime(laiks, "%H:%M").time()
+    except ValueError:
+        return "Lūdzu izvēlieties korektu laiku."
+
+    today = date.today()
+    max_date = add_months(today, 3)
+
+    if appointment_date < today or appointment_date > max_date:
+        return "Pieteikties var tikai no šodienas līdz 3 mēnešiem uz priekšu."
+
+    working_hours = get_working_hours_for_date(appointment_date)
+    if working_hours is None:
+        return "Svētdienā medicīnas centrs ir slēgts."
+
+    if appointment_time.minute not in {0, 15, 30, 45}:
+        return "Lūdzu izvēlieties laiku ar 15 minūšu soli: 00, 15, 30 vai 45."
+
+    appointment_minutes = appointment_time.hour * 60 + appointment_time.minute
+    opening_minutes, closing_minutes = working_hours
+    if appointment_minutes < opening_minutes or appointment_minutes > closing_minutes:
+        if appointment_date.weekday() <= 4:
+            return "Darba dienās var pieteikties tikai laikā no 9:00 līdz 21:00."
+        return "Sestdienās var pieteikties tikai laikā no 10:00 līdz 20:00."
+
+    return None
+
+
+APPOINTMENT_DUPLICATE_MESSAGE = (
+    "Uz šo procedūru Jums jau ir aktīvs pieteikums. "
+    "Vienlaikus var būt tikai viens pieteikums katrai procedūrai."
+)
+
+
+def appointment_owner_column(role: str) -> str:
+    if role == "doctor":
+        return "doctor_id"
+    return "user_id"
+
+
+def find_active_procedure_appointment(
+    owner_role: str,
+    owner_id: int | None,
+    procedura: str,
+    *,
+    exclude_appointment_id: int | None = None,
+) -> sqlite3.Row | None:
+    if owner_id is None or not procedura:
+        return None
+
+    owner_column = appointment_owner_column(owner_role)
+    current_moment = datetime.now()
+    today_value = current_moment.strftime("%Y-%m-%d")
+    time_value = current_moment.strftime("%H:%M")
+
+    query = f"""
+        SELECT id, user_id, doctor_id, procedura, datums, laiks
+        FROM appointments
+        WHERE {owner_column} = ?
+          AND procedura = ?
+          AND (
+              datums > ?
+              OR (datums = ? AND laiks >= ?)
+          )
+    """
+    params: list[Any] = [owner_id, procedura, today_value, today_value, time_value]
+
+    if exclude_appointment_id is not None:
+        query += " AND id != ?"
+        params.append(exclude_appointment_id)
+
+    query += " ORDER BY datums ASC, laiks ASC LIMIT 1"
+    return get_db().execute(query, params).fetchone()
+
+
+def is_valid_doctor_procedure(procedure: str) -> bool:
+    return procedure in DOCTOR_PROCEDURES
+
+
+def doctor_display_name(name: str | None, surname: str | None) -> str:
+    return " ".join(part for part in [name or "", surname or ""] if part).strip()
+
+
+def appointment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    data = row_to_dict(row)
+    if "doctor_name" in data or "doctor_surname" in data:
+        data["doctor_full_name"] = doctor_display_name(
+            data.get("doctor_name"),
+            data.get("doctor_surname"),
+        )
+    return data
+
+
+def validate_appointment_doctor(doctor_id: Any, procedura: str) -> sqlite3.Row | None:
+    if doctor_id in (None, ""):
+        return None
+
+    try:
+        doctor_identifier = int(doctor_id)
+    except (TypeError, ValueError):
+        return None
+
+    return get_db().execute(
+        """
+        SELECT * FROM doctors
+        WHERE id = ? AND procedure = ?
+        """,
+        (doctor_identifier, procedura),
+    ).fetchone()
+
+
+def public_doctor_option_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "surname": row["surname"],
+        "procedure": row["procedure"],
+        "full_name": doctor_display_name(row["name"], row["surname"]),
+    }
+
+
+def public_user_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "surname": row["surname"],
+        "phone": row["phone"],
+        "email": row["email"],
+        "created_at": row["created_at"],
+        "password_updated_at": row["password_updated_at"],
+        "role": "user",
+        "procedure": None,
+        "can_book_appointments": True,
+    }
+
+
+def public_doctor_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "surname": row["surname"],
+        "phone": row["phone"],
+        "email": row["email"],
+        "created_at": row["created_at"],
+        "password_updated_at": row["password_updated_at"],
+        "role": "doctor",
+        "procedure": row["procedure"],
+        "can_book_appointments": False,
+    }
+
+
+def current_user_row() -> sqlite3.Row | None:
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    return get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+
+def current_doctor_row() -> sqlite3.Row | None:
+    doctor_id = session.get("doctor_id")
+    if not doctor_id:
+        return None
+    return get_db().execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
+
+
+def current_account() -> dict[str, Any] | None:
+    user = current_user_row()
+    if user is not None:
+        return {
+            "role": "user",
+            **row_to_dict(user),
+        }
+
+    doctor = current_doctor_row()
+    if doctor is not None:
+        return {
+            "role": "doctor",
+            **row_to_dict(doctor),
+        }
+
+    return None
+
+
+def public_account_dict(account: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    if account["role"] == "doctor":
+        return public_doctor_dict(account)
+    return public_user_dict(account)
+
+
+def clear_account_session() -> None:
+    session.pop("user_id", None)
+    session.pop("doctor_id", None)
+
+
+def user_email_exists(
+    email: str,
+    *,
+    exclude_user_id: int | None = None,
+) -> bool:
+    db = get_db()
+
+    user_query = "SELECT id FROM users WHERE email = ?"
+    user_params: list[Any] = [email]
+    if exclude_user_id is not None:
+        user_query += " AND id != ?"
+        user_params.append(exclude_user_id)
+
+    existing_user = db.execute(user_query, user_params).fetchone()
+    return existing_user is not None
+
+
+def doctor_email_exists(
+    email: str,
+    *,
+    exclude_doctor_id: int | None = None,
+) -> bool:
+    db = get_db()
+
+    doctor_query = "SELECT id FROM doctors WHERE email = ?"
+    doctor_params: list[Any] = [email]
+    if exclude_doctor_id is not None:
+        doctor_query += " AND id != ?"
+        doctor_params.append(exclude_doctor_id)
+
+    existing_doctor = db.execute(doctor_query, doctor_params).fetchone()
+    return existing_doctor is not None
 
 
 def clean_html_text(value: str) -> str:
@@ -197,9 +452,22 @@ def init_db() -> None:
             password_updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS doctors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            surname TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            procedure TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            password_updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            doctor_id INTEGER,
             name TEXT NOT NULL,
             surname TEXT NOT NULL,
             phone TEXT NOT NULL,
@@ -232,6 +500,13 @@ def init_db() -> None:
         );
         """
     )
+
+    appointment_columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(appointments)").fetchall()
+    }
+    if "doctor_id" not in appointment_columns:
+        connection.execute("ALTER TABLE appointments ADD COLUMN doctor_id INTEGER")
 
     service_count = connection.execute("SELECT COUNT(*) FROM services").fetchone()[0]
     if service_count == 0:
@@ -266,32 +541,39 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return {key: row[key] for key in row.keys()}
 
 
-def public_user_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "surname": row["surname"],
-        "phone": row["phone"],
-        "email": row["email"],
-        "created_at": row["created_at"],
-        "password_updated_at": row["password_updated_at"],
-    }
-
-
-def current_user_row() -> sqlite3.Row | None:
-    user_id = session.get("user_id")
-    if not user_id:
-        return None
-    return get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-
-
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        user = current_user_row()
-        if user is None:
+        account = current_account()
+        if account is None:
             return jsonify({"error": "Authentication required"}), 401
-        return view(user, *args, **kwargs)
+        return view(account, *args, **kwargs)
+
+    return wrapped
+
+
+def patient_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        account = current_account()
+        if account is None:
+            return jsonify({"error": "Authentication required"}), 401
+        if account["role"] != "user":
+            return jsonify({"error": DOCTOR_APPOINTMENT_MESSAGE}), 403
+        return view(account, *args, **kwargs)
+
+    return wrapped
+
+
+def doctor_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        account = current_account()
+        if account is None:
+            return jsonify({"error": "Authentication required"}), 401
+        if account["role"] != "doctor":
+            return jsonify({"error": "Doctor authentication required"}), 403
+        return view(account, *args, **kwargs)
 
     return wrapped
 
@@ -323,8 +605,16 @@ def images(filename: str) -> Any:
 
 @app.route("/<path:filename>")
 def pages(filename: str) -> Any:
-    if filename in USER_ONLY_PAGES and current_user_row() is None:
+    account = current_account()
+
+    if filename in ACCOUNT_ONLY_PAGES and account is None:
         return redirect(url_for("pages", filename="login.html"))
+
+    if filename in PATIENT_ONLY_PAGES:
+        if account is None:
+            return redirect(url_for("pages", filename="login.html"))
+        if account["role"] != "user":
+            return redirect(url_for("pages", filename="user_cab.html"))
 
     if filename in ADMIN_ONLY_PAGES and not session.get("is_admin"):
         return redirect(url_for("pages", filename="admin-login.html"))
@@ -354,11 +644,7 @@ def api_register() -> Any:
         return jsonify({"error": "All fields are required"}), 400
 
     db = get_db()
-    existing_user = db.execute(
-        "SELECT id FROM users WHERE email = ?",
-        (email,),
-    ).fetchone()
-    if existing_user:
+    if user_email_exists(email):
         return jsonify({"error": "User with this email already exists"}), 409
 
     timestamp = now_iso()
@@ -388,41 +674,252 @@ def api_register() -> Any:
     ), 201
 
 
+@app.post("/api/doctors/register")
+def api_register_doctor() -> Any:
+    payload = request.get_json(silent=True) or {}
+
+    name = str(payload.get("name", "")).strip()
+    surname = str(payload.get("surname", "")).strip()
+    phone = str(payload.get("phone", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    procedure = str(payload.get("procedure", "")).strip()
+
+    if not all([name, surname, phone, email, password, procedure]):
+        return jsonify({"error": "All fields are required"}), 400
+
+    if not is_valid_doctor_procedure(procedure):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    db = get_db()
+    if doctor_email_exists(email):
+        return jsonify({"error": "Doctor with this email already exists"}), 409
+
+    timestamp = now_iso()
+    cursor = db.execute(
+        """
+        INSERT INTO doctors (name, surname, phone, email, password_hash, procedure, created_at, password_updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            name,
+            surname,
+            phone,
+            email,
+            generate_password_hash(password),
+            procedure,
+            timestamp,
+            timestamp,
+        ),
+    )
+    db.commit()
+
+    doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return jsonify(
+        {
+            "message": "Doctor registration successful",
+            "user": public_doctor_dict(doctor),
+        }
+    ), 201
+
+
 @app.post("/api/login")
 def api_login() -> Any:
     payload = request.get_json(silent=True) or {}
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
+    role = str(payload.get("role", "user")).strip().lower()
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    user = get_db().execute(
-        "SELECT * FROM users WHERE email = ?",
+    if role not in {"user", "doctor"}:
+        return jsonify({"error": "Lūdzu izvēlieties konta tipu."}), 400
+
+    db = get_db()
+    clear_account_session()
+
+    if role == "user":
+        user = db.execute(
+            "SELECT * FROM users WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if user is None or not check_password_hash(user["password_hash"], password):
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        session["user_id"] = user["id"]
+        return jsonify(
+            {
+                "message": "Login successful",
+                "user": public_user_dict(user),
+            }
+        )
+
+    doctor = db.execute(
+        "SELECT * FROM doctors WHERE email = ?",
         (email,),
     ).fetchone()
-    if user is None or not check_password_hash(user["password_hash"], password):
+    if doctor is None or not check_password_hash(doctor["password_hash"], password):
         return jsonify({"error": "Invalid email or password"}), 401
 
-    session["user_id"] = user["id"]
+    session["doctor_id"] = doctor["id"]
     return jsonify(
         {
             "message": "Login successful",
-            "user": public_user_dict(user),
+            "user": public_doctor_dict(doctor),
         }
     )
 
 
 @app.post("/api/logout")
 def api_logout() -> Any:
-    session.pop("user_id", None)
+    clear_account_session()
     return jsonify({"message": "Logged out"})
 
 
 @app.get("/api/me")
 @login_required
-def api_me(user: sqlite3.Row) -> Any:
-    return jsonify(public_user_dict(user))
+def api_me(account: dict[str, Any]) -> Any:
+    return jsonify(public_account_dict(account))
+
+
+@app.put("/api/me")
+@login_required
+def api_update_me(account: dict[str, Any]) -> Any:
+    payload = request.get_json(silent=True) or {}
+
+    name = str(payload.get("name", "")).strip()
+    surname = str(payload.get("surname", "")).strip()
+    phone = str(payload.get("phone", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    procedure = str(payload.get("procedure", "")).strip()
+
+    if not all([name, surname, phone, email]):
+        return jsonify({"error": "Name, surname, phone and email are required"}), 400
+
+    db = get_db()
+    if account["role"] == "user" and user_email_exists(email, exclude_user_id=account["id"]):
+        return jsonify({"error": "User with this email already exists"}), 409
+    if account["role"] == "doctor" and doctor_email_exists(email, exclude_doctor_id=account["id"]):
+        return jsonify({"error": "Doctor with this email already exists"}), 409
+
+    timestamp = now_iso()
+    if account["role"] == "doctor":
+        if not procedure or not is_valid_doctor_procedure(procedure):
+            return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+        procedure_changed = account.get("procedure") != procedure
+        db.execute(
+            """
+            UPDATE doctors
+            SET name = ?, surname = ?, phone = ?, email = ?, procedure = ?
+            WHERE id = ?
+            """,
+            (name, surname, phone, email, procedure, account["id"]),
+        )
+        if procedure_changed:
+            db.execute(
+                """
+                UPDATE appointments
+                SET doctor_id = NULL, updated_at = ?
+                WHERE doctor_id = ?
+                """,
+                (timestamp, account["id"]),
+            )
+        db.commit()
+
+        updated_doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (account["id"],)).fetchone()
+        return jsonify(
+            {
+                "message": "Profile updated successfully",
+                "user": public_doctor_dict(updated_doctor),
+            }
+        )
+
+    db.execute(
+        """
+        UPDATE users
+        SET name = ?, surname = ?, phone = ?, email = ?
+        WHERE id = ?
+        """,
+        (name, surname, phone, email, account["id"]),
+    )
+    db.execute(
+        """
+        UPDATE appointments
+        SET name = ?, surname = ?, phone = ?, email = ?, updated_at = ?
+        WHERE user_id = ?
+        """,
+        (name, surname, phone, email, timestamp, account["id"]),
+    )
+    db.commit()
+
+    updated_user = db.execute("SELECT * FROM users WHERE id = ?", (account["id"],)).fetchone()
+    return jsonify(
+        {
+            "message": "Profile updated successfully",
+            "user": public_user_dict(updated_user),
+        }
+    )
+
+
+@app.get("/api/my-appointments")
+@login_required
+def api_my_appointments(account: dict[str, Any]) -> Any:
+    db = get_db()
+
+    if account["role"] == "doctor":
+        rows = db.execute(
+            """
+            SELECT
+                appointments.*,
+                doctors.name AS doctor_name,
+                doctors.surname AS doctor_surname
+            FROM appointments
+            LEFT JOIN doctors ON doctors.id = appointments.doctor_id
+            WHERE appointments.doctor_id = ?
+            ORDER BY appointments.datums ASC, appointments.laiks ASC, appointments.created_at DESC
+            """,
+            (account["id"],),
+        ).fetchall()
+        return jsonify([appointment_to_dict(row) for row in rows])
+
+    rows = db.execute(
+        """
+        SELECT
+            appointments.*,
+            doctors.name AS doctor_name,
+            doctors.surname AS doctor_surname
+        FROM appointments
+        LEFT JOIN doctors ON doctors.id = appointments.doctor_id
+        WHERE appointments.user_id = ?
+        ORDER BY appointments.datums ASC, appointments.laiks ASC, appointments.created_at DESC
+        """,
+        (account["id"],),
+    ).fetchall()
+    return jsonify([appointment_to_dict(row) for row in rows])
+
+
+@app.delete("/api/my-appointments/<int:appointment_id>")
+@patient_required
+def api_delete_my_appointment(account: dict[str, Any], appointment_id: int) -> Any:
+    db = get_db()
+    appointment = db.execute(
+        """
+        SELECT id FROM appointments
+        WHERE id = ? AND user_id = ?
+        """,
+        (appointment_id, account["id"]),
+    ).fetchone()
+    if appointment is None:
+        return jsonify({"error": "Appointment not found"}), 404
+
+    db.execute(
+        "DELETE FROM appointments WHERE id = ?",
+        (appointment_id,),
+    )
+    db.commit()
+    return jsonify({"message": "Appointment cancelled successfully"})
 
 
 @app.get("/api/catalog")
@@ -474,9 +971,31 @@ def api_catalog() -> Any:
     return jsonify(catalog)
 
 
+@app.get("/api/doctors")
+@patient_required
+def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
+    procedura = str(request.args.get("procedura", "")).strip()
+    if not procedura:
+        return jsonify([])
+
+    if not is_valid_doctor_procedure(procedura):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    rows = get_db().execute(
+        """
+        SELECT id, name, surname, procedure
+        FROM doctors
+        WHERE procedure = ?
+        ORDER BY surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
+        """,
+        (procedura,),
+    ).fetchall()
+    return jsonify([public_doctor_option_dict(row) for row in rows])
+
+
 @app.post("/api/update-password")
 @login_required
-def api_update_password(user: sqlite3.Row) -> Any:
+def api_update_password(account: dict[str, Any]) -> Any:
     payload = request.get_json(silent=True) or {}
     password = str(payload.get("password", ""))
 
@@ -485,21 +1004,32 @@ def api_update_password(user: sqlite3.Row) -> Any:
 
     timestamp = now_iso()
     db = get_db()
-    db.execute(
-        """
-        UPDATE users
-        SET password_hash = ?, password_updated_at = ?
-        WHERE id = ?
-        """,
-        (generate_password_hash(password), timestamp, user["id"]),
-    )
+    if account["role"] == "doctor":
+        db.execute(
+            """
+            UPDATE doctors
+            SET password_hash = ?, password_updated_at = ?
+            WHERE id = ?
+            """,
+            (generate_password_hash(password), timestamp, account["id"]),
+        )
+    else:
+        db.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, password_updated_at = ?
+            WHERE id = ?
+            """,
+            (generate_password_hash(password), timestamp, account["id"]),
+        )
     db.commit()
 
     return jsonify({"message": "Password updated successfully"})
 
 
 @app.post("/api/appointments")
-def api_create_appointment() -> Any:
+@patient_required
+def api_create_appointment(account: dict[str, Any]) -> Any:
     payload = request.get_json(silent=True) or {}
 
     name = str(payload.get("name", "")).strip()
@@ -511,22 +1041,39 @@ def api_create_appointment() -> Any:
     laiks = str(payload.get("laiks", "")).strip()
     adrese = str(payload.get("adrese", "")).strip()
     comment = str(payload.get("comment", "")).strip()
+    raw_doctor_id = payload.get("doctor_id")
 
     if not all([name, surname, phone, email, procedura, datums, laiks, adrese]):
         return jsonify({"error": "All appointment fields are required"}), 400
 
-    user = current_user_row()
+    schedule_error = validate_appointment_schedule(datums, laiks)
+    if schedule_error:
+        return jsonify({"error": schedule_error}), 400
+
+    doctor = validate_appointment_doctor(raw_doctor_id, procedura)
+    if doctor is None:
+        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
+
+    existing_appointment = find_active_procedure_appointment(
+        "user",
+        account["id"],
+        procedura,
+    )
+    if existing_appointment is not None:
+        return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
+
     timestamp = now_iso()
     db = get_db()
     cursor = db.execute(
         """
         INSERT INTO appointments (
-            user_id, name, surname, phone, email, procedura, datums, laiks, adrese, comment, created_at, updated_at
+            user_id, doctor_id, name, surname, phone, email, procedura, datums, laiks, adrese, comment, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            user["id"] if user else None,
+            account["id"],
+            doctor["id"],
             name,
             surname,
             phone,
@@ -543,10 +1090,18 @@ def api_create_appointment() -> Any:
     db.commit()
 
     appointment = db.execute(
-        "SELECT * FROM appointments WHERE id = ?",
+        """
+        SELECT
+            appointments.*,
+            doctors.name AS doctor_name,
+            doctors.surname AS doctor_surname
+        FROM appointments
+        LEFT JOIN doctors ON doctors.id = appointments.doctor_id
+        WHERE appointments.id = ?
+        """,
         (cursor.lastrowid,),
     ).fetchone()
-    return jsonify({"message": "Appointment created", "appointment": row_to_dict(appointment)}), 201
+    return jsonify({"message": "Appointment created", "appointment": appointment_to_dict(appointment)}), 201
 
 
 @app.post("/api/admin/login")
@@ -595,11 +1150,7 @@ def api_admin_create_user() -> Any:
         return jsonify({"error": "Name, email and password are required"}), 400
 
     db = get_db()
-    existing_user = db.execute(
-        "SELECT id FROM users WHERE email = ?",
-        (email,),
-    ).fetchone()
-    if existing_user:
+    if user_email_exists(email):
         return jsonify({"error": "User with this email already exists"}), 409
 
     timestamp = now_iso()
@@ -650,11 +1201,7 @@ def api_admin_update_user(user_id: int) -> Any:
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
-    existing_user = db.execute(
-        "SELECT id FROM users WHERE email = ? AND id != ?",
-        (email, user_id),
-    ).fetchone()
-    if existing_user:
+    if user_email_exists(email, exclude_user_id=user_id):
         return jsonify({"error": "User with this email already exists"}), 409
 
     timestamp = now_iso()
@@ -682,6 +1229,135 @@ def api_admin_update_user(user_id: int) -> Any:
 
     updated_user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return jsonify(public_user_dict(updated_user))
+
+
+@app.get("/api/admin/doctors")
+@admin_required
+def api_admin_doctors() -> Any:
+    rows = get_db().execute(
+        "SELECT * FROM doctors ORDER BY created_at DESC"
+    ).fetchall()
+    return jsonify([public_doctor_dict(row) for row in rows])
+
+
+@app.post("/api/admin/doctors")
+@admin_required
+def api_admin_create_doctor() -> Any:
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name", "")).strip()
+    surname = str(payload.get("surname", "")).strip()
+    phone = str(payload.get("phone", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    procedure = str(payload.get("procedure", "")).strip()
+    password = str(payload.get("password", "")).strip()
+
+    if not all([name, email, procedure, password]):
+        return jsonify({"error": "Name, email, procedure and password are required"}), 400
+
+    if not is_valid_doctor_procedure(procedure):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    db = get_db()
+    if doctor_email_exists(email):
+        return jsonify({"error": "Doctor with this email already exists"}), 409
+
+    timestamp = now_iso()
+    cursor = db.execute(
+        """
+        INSERT INTO doctors (name, surname, phone, email, password_hash, procedure, created_at, password_updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            name,
+            surname,
+            phone,
+            email,
+            generate_password_hash(password),
+            procedure,
+            timestamp,
+            timestamp,
+        ),
+    )
+    db.commit()
+
+    doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return jsonify(public_doctor_dict(doctor)), 201
+
+
+@app.delete("/api/admin/doctors/<int:doctor_id>")
+@admin_required
+def api_admin_delete_doctor(doctor_id: int) -> Any:
+    db = get_db()
+    db.execute(
+        "UPDATE appointments SET doctor_id = NULL, updated_at = ? WHERE doctor_id = ?",
+        (now_iso(), doctor_id),
+    )
+    db.execute("DELETE FROM doctors WHERE id = ?", (doctor_id,))
+    db.commit()
+    return jsonify({"message": "Doctor deleted"})
+
+
+@app.put("/api/admin/doctors/<int:doctor_id>")
+@admin_required
+def api_admin_update_doctor(doctor_id: int) -> Any:
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name", "")).strip()
+    surname = str(payload.get("surname", "")).strip()
+    phone = str(payload.get("phone", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    procedure = str(payload.get("procedure", "")).strip()
+    password = str(payload.get("password", "")).strip()
+
+    if not all([name, email, procedure]):
+        return jsonify({"error": "Name, email and procedure are required"}), 400
+
+    if not is_valid_doctor_procedure(procedure):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    db = get_db()
+    doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
+    if doctor is None:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    if doctor_email_exists(email, exclude_doctor_id=doctor_id):
+        return jsonify({"error": "Doctor with this email already exists"}), 409
+
+    timestamp = now_iso()
+    password_hash = doctor["password_hash"]
+    procedure_changed = doctor["procedure"] != procedure
+    if password:
+        password_hash = generate_password_hash(password)
+
+    db.execute(
+        """
+        UPDATE doctors
+        SET name = ?, surname = ?, phone = ?, email = ?, password_hash = ?, procedure = ?, password_updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            name,
+            surname,
+            phone,
+            email,
+            password_hash,
+            procedure,
+            timestamp,
+            doctor_id,
+        ),
+    )
+    if procedure_changed:
+        db.execute(
+            """
+            UPDATE appointments
+            SET doctor_id = NULL, updated_at = ?
+            WHERE doctor_id = ?
+            """,
+            (timestamp, doctor_id),
+        )
+    db.commit()
+
+    updated_doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
+    return jsonify(public_doctor_dict(updated_doctor))
 
 
 @app.get("/api/admin/services")
@@ -864,9 +1540,17 @@ def api_admin_update_price(price_id: int) -> Any:
 @admin_required
 def api_admin_appointments() -> Any:
     rows = get_db().execute(
-        "SELECT * FROM appointments ORDER BY created_at DESC"
+        """
+        SELECT
+            appointments.*,
+            doctors.name AS doctor_name,
+            doctors.surname AS doctor_surname
+        FROM appointments
+        LEFT JOIN doctors ON doctors.id = appointments.doctor_id
+        ORDER BY appointments.created_at DESC
+        """
     ).fetchall()
-    return jsonify([row_to_dict(row) for row in rows])
+    return jsonify([appointment_to_dict(row) for row in rows])
 
 
 @app.put("/api/admin/appointments/<int:appointment_id>")
@@ -886,18 +1570,41 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
     if not all([name, surname, phone, email, procedura, datums, laiks, adrese]):
         return jsonify({"error": "All appointment fields are required"}), 400
 
+    schedule_error = validate_appointment_schedule(datums, laiks)
+    if schedule_error:
+        return jsonify({"error": schedule_error}), 400
+
     db = get_db()
     appointment = db.execute(
-        "SELECT id FROM appointments WHERE id = ?",
+        "SELECT id, user_id, doctor_id FROM appointments WHERE id = ?",
         (appointment_id,),
     ).fetchone()
     if appointment is None:
         return jsonify({"error": "Appointment not found"}), 404
 
+    owner_role = "user"
+    owner_id = appointment["user_id"]
+    if owner_id is not None:
+        conflicting_appointment = find_active_procedure_appointment(
+            owner_role,
+            owner_id,
+            procedura,
+            exclude_appointment_id=appointment_id,
+        )
+        if conflicting_appointment is not None:
+            return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
+
+    raw_doctor_id = payload.get("doctor_id", appointment["doctor_id"])
+    doctor = validate_appointment_doctor(raw_doctor_id, procedura)
+    if raw_doctor_id not in (None, "") and doctor is None and "doctor_id" in payload:
+        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
+
+    doctor_id = doctor["id"] if doctor is not None else None
+
     db.execute(
         """
         UPDATE appointments
-        SET name = ?, surname = ?, phone = ?, email = ?, procedura = ?, datums = ?, laiks = ?, adrese = ?, comment = ?, updated_at = ?
+        SET name = ?, surname = ?, phone = ?, email = ?, procedura = ?, doctor_id = ?, datums = ?, laiks = ?, adrese = ?, comment = ?, updated_at = ?
         WHERE id = ?
         """,
         (
@@ -906,6 +1613,7 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
             phone,
             email,
             procedura,
+            doctor_id,
             datums,
             laiks,
             adrese,
@@ -917,10 +1625,18 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
     db.commit()
 
     updated_appointment = db.execute(
-        "SELECT * FROM appointments WHERE id = ?",
+        """
+        SELECT
+            appointments.*,
+            doctors.name AS doctor_name,
+            doctors.surname AS doctor_surname
+        FROM appointments
+        LEFT JOIN doctors ON doctors.id = appointments.doctor_id
+        WHERE appointments.id = ?
+        """,
         (appointment_id,),
     ).fetchone()
-    return jsonify(row_to_dict(updated_appointment))
+    return jsonify(appointment_to_dict(updated_appointment))
 
 
 @app.delete("/api/admin/appointments/<int:appointment_id>")

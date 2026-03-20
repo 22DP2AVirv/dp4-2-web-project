@@ -1,8 +1,15 @@
 const loginForm = document.getElementById("loginForm");
 
+function getRequestedRole() {
+    const params = new URLSearchParams(window.location.search);
+    const requestedRole = params.get("role");
+    return requestedRole === "doctor" ? "doctor" : "user";
+}
+
 async function submitLogin(event) {
     event.preventDefault();
 
+    const role = document.getElementById("role").value;
     const email = document.getElementById("email").value.trim().toLowerCase();
     const password = document.getElementById("password").value;
 
@@ -12,7 +19,7 @@ async function submitLogin(event) {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ role, email, password })
         });
 
         const data = await response.json();
@@ -27,5 +34,10 @@ async function submitLogin(event) {
 }
 
 if (loginForm) {
+    const roleField = document.getElementById("role");
+    if (roleField) {
+        roleField.value = getRequestedRole();
+    }
+
     loginForm.addEventListener("submit", submitLogin);
 }

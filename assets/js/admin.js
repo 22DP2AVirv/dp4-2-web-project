@@ -1,3 +1,45 @@
+const PROCEDURE_LABELS = {
+    datortomografija: "Datortomogrāfija",
+    gimenesArsts: "Ģimenes ārsts",
+    vakcinacija: "Vakcinācija"
+};
+
+const PROCEDURE_ALIASES = {
+    datortomografija: "datortomografija",
+    datortomogrāfija: "datortomografija",
+    gimenesarsts: "gimenesArsts",
+    ģimenesārsts: "gimenesArsts",
+    gimenesarsts: "gimenesArsts",
+    vakcinacija: "vakcinacija",
+    vakcinācija: "vakcinacija"
+};
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function normalizeText(value) {
+    return String(value ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, "")
+        .toLowerCase();
+}
+
+function formatProcedure(value) {
+    return PROCEDURE_LABELS[value] || value || "-";
+}
+
+function parseProcedureValue(value) {
+    const normalized = normalizeText(value);
+    return PROCEDURE_ALIASES[normalized] || null;
+}
+
 async function apiRequest(url, options = {}) {
     const config = {
         headers: {
@@ -19,7 +61,7 @@ async function apiRequest(url, options = {}) {
 
     if (!response.ok) {
         const message = typeof data === "string" ? data : data.error;
-        throw new Error(message || "Neizdevas izpildit pieprasijumu.");
+        throw new Error(message || "Neizdevās izpildīt pieprasījumu.");
     }
 
     return data;
@@ -36,6 +78,10 @@ function formatDate(value, withTime = true) {
     }
 
     return withTime ? date.toLocaleString("lv-LV") : date.toLocaleDateString("lv-LV");
+}
+
+function formatFullName(item) {
+    return [item.name, item.surname].filter(Boolean).join(" ") || "-";
 }
 
 function handleAdminError(error) {
@@ -59,7 +105,7 @@ function promptRequired(label, currentValue = "") {
             return trimmed;
         }
 
-        alert("Sis lauks ir obligats.");
+        alert("Šis lauks ir obligāts.");
     }
 }
 
@@ -72,8 +118,34 @@ function promptOptional(label, currentValue = "") {
     return value.trim();
 }
 
+function promptProcedure(currentValue = "") {
+    const defaultValue = currentValue ? formatProcedure(currentValue) : "";
+
+    while (true) {
+        const value = prompt(
+            "Procedūra (Datortomogrāfija, Ģimenes ārsts, Vakcinācija):",
+            defaultValue
+        );
+
+        if (value === null) {
+            return null;
+        }
+
+        const parsedValue = parseProcedureValue(value);
+        if (parsedValue) {
+            return parsedValue;
+        }
+
+        alert("Lūdzu ievadi vienu no procedūrām: Datortomogrāfija, Ģimenes ārsts vai Vakcinācija.");
+    }
+}
+
 async function getUsers() {
     return apiRequest("/api/admin/users");
+}
+
+async function getDoctors() {
+    return apiRequest("/api/admin/doctors");
 }
 
 async function getServices() {
@@ -96,28 +168,53 @@ async function renderUsers() {
 
     const users = await getUsers();
     if (!users.length) {
-        userList.innerHTML = '<tr><td colspan="7">Nav registretu lietotaju.</td></tr>';
+        userList.innerHTML = '<tr><td colspan="7">Nav reģistrētu lietotāju.</td></tr>';
         return;
     }
 
-    userList.innerHTML = users.map((user) => {
-        const fullName = [user.name, user.surname].filter(Boolean).join(" ");
+    userList.innerHTML = users.map((user) => `
+        <tr>
+            <td>${user.id}</td>
+            <td>${escapeHtml(formatFullName(user))}</td>
+            <td>${escapeHtml(user.email || "-")}</td>
+            <td>${escapeHtml(user.phone || "-")}</td>
+            <td>${escapeHtml(formatDate(user.created_at))}</td>
+            <td>${escapeHtml(formatDate(user.password_updated_at))}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editUser(${user.id})">Rediģēt</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Dzēst</button>
+            </td>
+        </tr>
+    `).join("");
+}
 
-        return `
-            <tr>
-                <td>${user.id}</td>
-                <td>${fullName || "-"}</td>
-                <td>${user.email || "-"}</td>
-                <td>${user.phone || "-"}</td>
-                <td>${formatDate(user.created_at)}</td>
-                <td>${formatDate(user.password_updated_at)}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="editUser(${user.id})">Rediģēt</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Dzēst</button>
-                </td>
-            </tr>
-        `;
-    }).join("");
+async function renderDoctors() {
+    const doctorList = document.getElementById("doctorList");
+    if (!doctorList) {
+        return;
+    }
+
+    const doctors = await getDoctors();
+    if (!doctors.length) {
+        doctorList.innerHTML = '<tr><td colspan="8">Nav reģistrētu ārstu.</td></tr>';
+        return;
+    }
+
+    doctorList.innerHTML = doctors.map((doctor) => `
+        <tr>
+            <td>${doctor.id}</td>
+            <td>${escapeHtml(formatFullName(doctor))}</td>
+            <td>${escapeHtml(doctor.email || "-")}</td>
+            <td>${escapeHtml(doctor.phone || "-")}</td>
+            <td>${escapeHtml(formatProcedure(doctor.procedure))}</td>
+            <td>${escapeHtml(formatDate(doctor.created_at))}</td>
+            <td>${escapeHtml(formatDate(doctor.password_updated_at))}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editDoctor(${doctor.id})">Rediģēt</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDoctor(${doctor.id})">Dzēst</button>
+            </td>
+        </tr>
+    `).join("");
 }
 
 async function renderServices() {
@@ -128,23 +225,21 @@ async function renderServices() {
 
     const services = await getServices();
     if (!services.length) {
-        serviceList.innerHTML = '<tr><td colspan="4">Nav saglabatu pakalpojumu.</td></tr>';
+        serviceList.innerHTML = '<tr><td colspan="4">Nav saglabātu pakalpojumu.</td></tr>';
         return;
     }
 
-    serviceList.innerHTML = services.map((service) => {
-        return `
-            <tr>
-                <td>${service.id}</td>
-                <td>${service.service_name}</td>
-                <td>${service.description}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="editService(${service.id})">Rediģēt</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteService(${service.id})">Dzēst</button>
-                </td>
-            </tr>
-        `;
-    }).join("");
+    serviceList.innerHTML = services.map((service) => `
+        <tr>
+            <td>${service.id}</td>
+            <td>${escapeHtml(service.service_name)}</td>
+            <td>${escapeHtml(service.description)}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editService(${service.id})">Rediģēt</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteService(${service.id})">Dzēst</button>
+            </td>
+        </tr>
+    `).join("");
 }
 
 async function renderPrices() {
@@ -155,26 +250,24 @@ async function renderPrices() {
 
     const prices = await getPrices();
     if (!prices.length) {
-        priceList.innerHTML = '<tr><td colspan="7">Nav saglabatu cenu ierakstu.</td></tr>';
+        priceList.innerHTML = '<tr><td colspan="7">Nav saglabātu cenu ierakstu.</td></tr>';
         return;
     }
 
-    priceList.innerHTML = prices.map((price, index) => {
-        return `
-            <tr>
-                <td>${index + 1}</td>
-                <td>${price.title}</td>
-                <td>${price.service_name}</td>
-                <td>${Number(price.price).toFixed(2)} EUR</td>
-                <td>${formatDate(price.created_at, false)}</td>
-                <td>${formatDate(price.updated_at)}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="editPrice(${price.id})">Rediģēt</button>
-                    <button class="btn btn-danger btn-sm" onclick="deletePrice(${price.id})">Dzēst</button>
-                </td>
-            </tr>
-        `;
-    }).join("");
+    priceList.innerHTML = prices.map((price, index) => `
+        <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(price.title)}</td>
+            <td>${escapeHtml(price.service_name)}</td>
+            <td>${escapeHtml(Number(price.price).toFixed(2))} EUR</td>
+            <td>${escapeHtml(formatDate(price.created_at, false))}</td>
+            <td>${escapeHtml(formatDate(price.updated_at))}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editPrice(${price.id})">Rediģēt</button>
+                <button class="btn btn-danger btn-sm" onclick="deletePrice(${price.id})">Dzēst</button>
+            </td>
+        </tr>
+    `).join("");
 }
 
 async function renderAppointments() {
@@ -185,32 +278,30 @@ async function renderAppointments() {
 
     const appointments = await getAppointments();
     if (!appointments.length) {
-        appointmentList.innerHTML = '<tr><td colspan="13">Nav saglabatu pieteikumu.</td></tr>';
+        appointmentList.innerHTML = '<tr><td colspan="13">Nav saglabātu pieteikumu.</td></tr>';
         return;
     }
 
-    appointmentList.innerHTML = appointments.map((appointment) => {
-        return `
-            <tr>
-                <td>${appointment.id}</td>
-                <td>${appointment.name || "-"}</td>
-                <td>${appointment.surname || "-"}</td>
-                <td>${appointment.phone || "-"}</td>
-                <td>${appointment.email || "-"}</td>
-                <td>${appointment.procedura || "-"}</td>
-                <td>${appointment.datums || "-"}</td>
-                <td>${appointment.laiks || "-"}</td>
-                <td>${appointment.adrese || "-"}</td>
-                <td>${formatDate(appointment.created_at)}</td>
-                <td>${formatDate(appointment.updated_at)}</td>
-                <td>${appointment.comment || ""}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="editAppointment(${appointment.id})">Rediģēt</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteAppointment(${appointment.id})">Dzēst</button>
-                </td>
-            </tr>
-        `;
-    }).join("");
+    appointmentList.innerHTML = appointments.map((appointment) => `
+        <tr>
+            <td>${appointment.id}</td>
+            <td>${escapeHtml(appointment.name || "-")}</td>
+            <td>${escapeHtml(appointment.surname || "-")}</td>
+            <td>${escapeHtml(appointment.phone || "-")}</td>
+            <td>${escapeHtml(appointment.email || "-")}</td>
+            <td>${escapeHtml(formatProcedure(appointment.procedura))}</td>
+            <td>${escapeHtml(appointment.datums || "-")}</td>
+            <td>${escapeHtml(appointment.laiks || "-")}</td>
+            <td>${escapeHtml(appointment.adrese || "-")}</td>
+            <td>${escapeHtml(formatDate(appointment.created_at))}</td>
+            <td>${escapeHtml(formatDate(appointment.updated_at))}</td>
+            <td>${escapeHtml(appointment.comment || "")}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editAppointment(${appointment.id})">Rediģēt</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteAppointment(${appointment.id})">Dzēst</button>
+            </td>
+        </tr>
+    `).join("");
 }
 
 window.logout = async function logout() {
@@ -222,7 +313,7 @@ window.logout = async function logout() {
 };
 
 window.deleteUser = async function deleteUser(userId) {
-    if (!confirm("Vai tiesam dzest so lietotaju?")) {
+    if (!confirm("Vai tiešām dzēst šo lietotāju?")) {
         return;
     }
 
@@ -238,30 +329,30 @@ window.editUser = async function editUser(userId) {
     try {
         const user = (await getUsers()).find((item) => item.id === userId);
         if (!user) {
-            throw new Error("Lietotajs nav atrasts.");
+            throw new Error("Lietotājs nav atrasts.");
         }
 
-        const name = promptRequired("Lietotaja vards:", user.name || "");
+        const name = promptRequired("Lietotāja vārds:", user.name || "");
         if (name === null) {
             return;
         }
 
-        const surname = promptOptional("Lietotaja uzvards:", user.surname || "");
+        const surname = promptOptional("Lietotāja uzvārds:", user.surname || "");
         if (surname === null) {
             return;
         }
 
-        const email = promptRequired("Lietotaja e-pasts:", user.email || "");
+        const email = promptRequired("Lietotāja e-pasts:", user.email || "");
         if (email === null) {
             return;
         }
 
-        const phone = promptOptional("Lietotaja talrunis:", user.phone || "");
+        const phone = promptOptional("Lietotāja tālrunis:", user.phone || "");
         if (phone === null) {
             return;
         }
 
-        const password = promptOptional("Ja gribi nomainit paroli, ievadi jaunu. Citadi atstaj tuksu.", "");
+        const password = promptOptional("Ja gribi nomainīt paroli, ievadi jaunu. Citādi atstāj tukšu.", "");
         if (password === null) {
             return;
         }
@@ -283,14 +374,83 @@ window.editUser = async function editUser(userId) {
     }
 };
 
+window.deleteDoctor = async function deleteDoctor(doctorId) {
+    if (!confirm("Vai tiešām dzēst šo ārstu?")) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/api/admin/doctors/${doctorId}`, { method: "DELETE" });
+        await renderDoctors();
+    } catch (error) {
+        handleAdminError(error);
+    }
+};
+
+window.editDoctor = async function editDoctor(doctorId) {
+    try {
+        const doctor = (await getDoctors()).find((item) => item.id === doctorId);
+        if (!doctor) {
+            throw new Error("Ārsts nav atrasts.");
+        }
+
+        const name = promptRequired("Ārsta vārds:", doctor.name || "");
+        if (name === null) {
+            return;
+        }
+
+        const surname = promptOptional("Ārsta uzvārds:", doctor.surname || "");
+        if (surname === null) {
+            return;
+        }
+
+        const email = promptRequired("Ārsta e-pasts:", doctor.email || "");
+        if (email === null) {
+            return;
+        }
+
+        const phone = promptOptional("Ārsta tālrunis:", doctor.phone || "");
+        if (phone === null) {
+            return;
+        }
+
+        const procedure = promptProcedure(doctor.procedure);
+        if (procedure === null) {
+            return;
+        }
+
+        const password = promptOptional("Ja gribi nomainīt paroli, ievadi jaunu. Citādi atstāj tukšu.", "");
+        if (password === null) {
+            return;
+        }
+
+        await apiRequest(`/api/admin/doctors/${doctorId}`, {
+            method: "PUT",
+            body: JSON.stringify({
+                name,
+                surname,
+                email,
+                phone,
+                procedure,
+                password
+            })
+        });
+
+        await renderDoctors();
+    } catch (error) {
+        handleAdminError(error);
+    }
+};
+
 window.deleteService = async function deleteService(serviceId) {
-    if (!confirm("Vai tiesam dzest so pakalpojumu?")) {
+    if (!confirm("Vai tiešām dzēst šo pakalpojumu?")) {
         return;
     }
 
     try {
         await apiRequest(`/api/admin/services/${serviceId}`, { method: "DELETE" });
         await renderServices();
+        await renderPrices();
     } catch (error) {
         handleAdminError(error);
     }
@@ -322,13 +482,14 @@ window.editService = async function editService(serviceId) {
         });
 
         await renderServices();
+        await renderPrices();
     } catch (error) {
         handleAdminError(error);
     }
 };
 
 window.deletePrice = async function deletePrice(priceId) {
-    if (!confirm("Vai tiesam dzest so cenu?")) {
+    if (!confirm("Vai tiešām dzēst šo cenu?")) {
         return;
     }
 
@@ -378,7 +539,7 @@ window.editPrice = async function editPrice(priceId) {
 };
 
 window.deleteAppointment = async function deleteAppointment(appointmentId) {
-    if (!confirm("Vai tiesam dzest so pieteikumu?")) {
+    if (!confirm("Vai tiešām dzēst šo pieteikumu?")) {
         return;
     }
 
@@ -397,47 +558,47 @@ window.editAppointment = async function editAppointment(appointmentId) {
             throw new Error("Pieteikums nav atrasts.");
         }
 
-        const name = promptRequired("Vards:", appointment.name || "");
+        const name = promptRequired("Vārds:", appointment.name || "");
         if (name === null) {
             return;
         }
 
-        const surname = promptRequired("Uzvards:", appointment.surname || "");
+        const surname = promptRequired("Uzvārds:", appointment.surname || "");
         if (surname === null) {
             return;
         }
 
-        const phone = promptRequired("Talrunis:", appointment.phone || "");
+        const phone = promptRequired("Tālrunis:", appointment.phone || "");
         if (phone === null) {
             return;
         }
 
-        const email = promptRequired("Epasts:", appointment.email || "");
+        const email = promptRequired("E-pasts:", appointment.email || "");
         if (email === null) {
             return;
         }
 
-        const procedura = promptRequired("Procedura:", appointment.procedura || "");
+        const procedura = promptProcedure(appointment.procedura);
         if (procedura === null) {
             return;
         }
 
-        const datums = promptRequired("Velamais datums (YYYY-MM-DD):", appointment.datums || "");
+        const datums = promptRequired("Vēlamais datums (YYYY-MM-DD):", appointment.datums || "");
         if (datums === null) {
             return;
         }
 
-        const laiks = promptRequired("Velamais laiks (HH:MM):", appointment.laiks || "");
+        const laiks = promptRequired("Vēlamais laiks (HH:MM):", appointment.laiks || "");
         if (laiks === null) {
             return;
         }
 
-        const adrese = promptRequired("Adrese vai filiale:", appointment.adrese || "");
+        const adrese = promptRequired("Adrese vai filiāle:", appointment.adrese || "");
         if (adrese === null) {
             return;
         }
 
-        const comment = promptOptional("Komentars:", appointment.comment || "");
+        const comment = promptOptional("Komentārs:", appointment.comment || "");
         if (comment === null) {
             return;
         }
@@ -467,6 +628,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         await Promise.all([
             renderUsers(),
+            renderDoctors(),
             renderServices(),
             renderPrices(),
             renderAppointments()
@@ -478,27 +640,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     const addUserBtn = document.getElementById("addUserBtn");
     if (addUserBtn) {
         addUserBtn.addEventListener("click", async () => {
-            const name = promptRequired("Ievadi lietotaja vardu:");
+            const name = promptRequired("Ievadi lietotāja vārdu:");
             if (name === null) {
                 return;
             }
 
-            const surname = promptOptional("Ievadi lietotaja uzvardu:", "");
+            const surname = promptOptional("Ievadi lietotāja uzvārdu:", "");
             if (surname === null) {
                 return;
             }
 
-            const email = promptRequired("Ievadi lietotaja e-pastu:");
+            const email = promptRequired("Ievadi lietotāja e-pastu:");
             if (email === null) {
                 return;
             }
 
-            const phone = promptOptional("Ievadi lietotaja talruni:", "");
+            const phone = promptOptional("Ievadi lietotāja tālruni:", "");
             if (phone === null) {
                 return;
             }
 
-            const password = promptRequired("Ievadi lietotaja sakuma paroli:");
+            const password = promptRequired("Ievadi lietotāja sākuma paroli:");
             if (password === null) {
                 return;
             }
@@ -515,6 +677,58 @@ document.addEventListener("DOMContentLoaded", async () => {
                     })
                 });
                 await renderUsers();
+            } catch (error) {
+                handleAdminError(error);
+            }
+        });
+    }
+
+    const addDoctorBtn = document.getElementById("addDoctorBtn");
+    if (addDoctorBtn) {
+        addDoctorBtn.addEventListener("click", async () => {
+            const name = promptRequired("Ievadi ārsta vārdu:");
+            if (name === null) {
+                return;
+            }
+
+            const surname = promptOptional("Ievadi ārsta uzvārdu:", "");
+            if (surname === null) {
+                return;
+            }
+
+            const email = promptRequired("Ievadi ārsta e-pastu:");
+            if (email === null) {
+                return;
+            }
+
+            const phone = promptOptional("Ievadi ārsta tālruni:", "");
+            if (phone === null) {
+                return;
+            }
+
+            const procedure = promptProcedure();
+            if (procedure === null) {
+                return;
+            }
+
+            const password = promptRequired("Ievadi ārsta sākuma paroli:");
+            if (password === null) {
+                return;
+            }
+
+            try {
+                await apiRequest("/api/admin/doctors", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        name,
+                        surname,
+                        email,
+                        phone,
+                        procedure,
+                        password
+                    })
+                });
+                await renderDoctors();
             } catch (error) {
                 handleAdminError(error);
             }

@@ -1,22 +1,23 @@
-const registrationForm = document.getElementById("registrationForm");
+const doctorRegistrationForm = document.getElementById("doctorRegistrationForm");
 
-async function submitRegistration(event) {
+async function submitDoctorRegistration(event) {
     event.preventDefault();
 
     const name = document.getElementById("name").value.trim();
     const surname = document.getElementById("surname").value.trim();
     const phone = document.getElementById("phone").value.trim();
     const email = document.getElementById("email").value.trim().toLowerCase();
+    const procedure = document.getElementById("procedure").value;
     const password = document.getElementById("password").value;
     const confirmPassword = document.getElementById("confirmPassword").value;
 
     if (password !== confirmPassword) {
-        alert("Paroles nesakrit.");
+        alert("Paroles nesakrīt.");
         return;
     }
 
     try {
-        const response = await fetch("/api/register", {
+        const response = await fetch("/api/doctors/register", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -26,22 +27,23 @@ async function submitRegistration(event) {
                 surname,
                 phone,
                 email,
+                procedure,
                 password
             })
         });
 
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.error || "Neizdevas pieregistreties.");
+            throw new Error(data.error || "Neizdevās reģistrēt ārsta kontu.");
         }
 
-        alert("Registracija pabeigta. Tagad vari pieslegties.");
-        window.location.href = "login.html?role=user";
+        alert("Ārsta reģistrācija pabeigta. Tagad vari pieslēgties.");
+        window.location.href = "login.html?role=doctor";
     } catch (error) {
         alert(error.message);
     }
 }
 
-if (registrationForm) {
-    registrationForm.addEventListener("submit", submitRegistration);
+if (doctorRegistrationForm) {
+    doctorRegistrationForm.addEventListener("submit", submitDoctorRegistration);
 }
