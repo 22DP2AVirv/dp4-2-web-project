@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 import sqlite3
@@ -10,6 +11,8 @@ from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from flask import (
     Flask,
@@ -30,7 +33,16 @@ DB_PATH = BASE_DIR / "app.db"
 HTML_PAGES = {path.name for path in BASE_DIR.glob("*.html")}
 ACCOUNT_ONLY_PAGES = {"user_cab.html", "pieteikties.html"}
 PATIENT_ONLY_PAGES = {"pieteikties.html"}
-ADMIN_ONLY_PAGES = {"admin-panel.html", "pieteikumi-adm.html"}
+ADMIN_ONLY_PAGES = {
+    "admin-panel.html",
+    "admin-users.html",
+    "admin-doctors.html",
+    "admin-services.html",
+    "admin-prices.html",
+    "admin-about.html",
+    "admin-messages.html",
+    "pieteikumi-adm.html",
+}
 DOCTOR_PROCEDURES = {"datortomografija", "gimenesArsts", "vakcinacija"}
 DOCTOR_APPOINTMENT_MESSAGE = "Ārsta kontam procedūru pieteikšana nav pieejama."
 
@@ -52,6 +64,64 @@ FALLBACK_PRICES = [
     ("Vakcinācija pret gripu:", "Vakcinācija", 22.50),
 ]
 
+FALLBACK_ABOUT_PAGE_TITLE = "Par mums"
+FALLBACK_ABOUT_CONTENT = [
+    {
+        "entry_type": "page_title",
+        "title": FALLBACK_ABOUT_PAGE_TITLE,
+        "content": "",
+        "content_format": "text",
+        "image_path": "",
+        "image_alt": "",
+        "sort_order": 0,
+    },
+    {
+        "entry_type": "section",
+        "title": "Par uzņēmumu",
+        "content": (
+            "\"Health and Care\" ir mūsdienīgs medicīnas centrs Rīgā, kas kopš 2010. gada "
+            "piedāvā kvalitatīvus veselības aprūpes pakalpojumus. Mūsu mērķis ir nodrošināt "
+            "profesionālu, drošu un pieejamu medicīnas aprūpi ikvienam pacientam. "
+            "Mēs pastāvīgi ieguldām jaunākajās tehnoloģijās, lai uzlabotu diagnostiku, "
+            "ārstēšanu un pacientu pieredzi."
+        ),
+        "content_format": "paragraph",
+        "image_path": "/images/aboutUS.webp",
+        "image_alt": "Par uzņēmumu",
+        "sort_order": 1,
+    },
+    {
+        "entry_type": "section",
+        "title": "Mūsu misija",
+        "content": (
+            "Uzlabot cilvēku dzīves kvalitāti, nodrošinot uzticamu un efektīvu veselības aprūpi. "
+            "Mēs strādājam ar sirdi un zināšanām, lai sniegtu labāko iespējamo palīdzību katram. "
+            "Mūsu misija ir balstīta uz cieņpilnu attieksmi, zinātnē balstītiem lēmumiem un "
+            "ilgtermiņa attiecību veidošanu ar pacientiem."
+        ),
+        "content_format": "paragraph",
+        "image_path": "/images/misija.webp",
+        "image_alt": "Mūsu misija",
+        "sort_order": 2,
+    },
+    {
+        "entry_type": "section",
+        "title": "Mūsu vērtības",
+        "content": "\n".join(
+            [
+                "Pacienta cieņa un individuāla pieeja",
+                "Augsta profesionalitāte",
+                "Inovācijas un attīstība",
+                "Sadarbība un uzticība",
+            ]
+        ),
+        "content_format": "list",
+        "image_path": "/images/values.webp",
+        "image_alt": "Mūsu vērtības",
+        "sort_order": 3,
+    },
+]
+
 LEGACY_GENERIC_SERVICE_DESCRIPTIONS = {
     "Izmeklējumi ar modernu aparatūru.",
     "Konsultācijas un regulāras pārbaudes.",
@@ -71,6 +141,470 @@ app.config["ADMIN_PASSWORD"] = os.environ.get(
     "ADMIN_PASSWORD",
     "Parole290306",
 )
+app.config["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "").strip()
+app.config["OPENAI_CHAT_MODEL"] = os.environ.get("OPENAI_CHAT_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
+
+CLINIC_NAME = "Health and Care"
+CLINIC_PHONE = "+371 22351340"
+CLINIC_EMAIL = "info@healthandcare.lv"
+CLINIC_MAIN_ADDRESS = "Lidoņu iela 13, Rīga, LV-1055"
+CLINIC_BRANCHES = [
+    "Rīga, Brīvības iela",
+    "Jelgava, Zemgales prospekts",
+    "Liepāja, Rožu iela",
+]
+CHATBOT_OFF_TOPIC_MESSAGE = (
+    "Varu palīdzēt tikai ar jautājumiem par klīniku Health and Care, tās pakalpojumiem, "
+    "ārstiem, cenām, filiālēm, darba laiku un pieraksta kārtību."
+)
+CHATBOT_FALLBACK_MESSAGE = (
+    "Varu palīdzēt ar darba laiku, kontaktiem, pakalpojumiem, cenām, ārstiem, "
+    "reģistrāciju un pieraksta noteikumiem. Uzraksti, kas tieši interesē."
+)
+CHATBOT_GREETINGS = {
+    "sveiki",
+    "labdien",
+    "hey",
+    "hi",
+    "hello",
+    "čau",
+    "cau",
+}
+CHATBOT_SERVICE_LABELS = {
+    "datortomografija": "Datortomogrāfija",
+    "gimenesArsts": "Ģimenes ārsts",
+    "vakcinacija": "Vakcinācija",
+}
+CHATBOT_SERVICE_ALIASES = {
+    "datortomografija": ("datortomograf", "tomograf", "ct"),
+    "gimenesArsts": ("gimenes arst", "gimenesarst", "arsts", "arsta konsult", "konsultacij"),
+    "vakcinacija": ("vakcin", "pot"),
+}
+CHATBOT_CLINIC_KEYWORDS = (
+    "klin",
+    "health and care",
+    "pakalpoj",
+    "procedur",
+    "cena",
+    "cen",
+    "maks",
+    "pierakst",
+    "pieteikt",
+    "darba laik",
+    "filial",
+    "adrese",
+    "kontakti",
+    "talrun",
+    "epast",
+    "arst",
+    "vakcin",
+    "datortomograf",
+    "gimenes",
+    "profils",
+    "parole",
+    "registr",
+    "lietotaj",
+    "kabinet",
+)
+
+
+def normalize_chatbot_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.lower())
+    without_diacritics = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+    return re.sub(r"[^a-z0-9\s+]", " ", without_diacritics)
+
+
+def format_chatbot_price(value: float | int | str) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return f"{value} EUR"
+    return f"{amount:.2f}".replace(".", ",") + " EUR"
+
+
+def detect_chatbot_service_key(message: str) -> str | None:
+    normalized_message = normalize_chatbot_text(message)
+    for service_key, aliases in CHATBOT_SERVICE_ALIASES.items():
+        if any(alias in normalized_message for alias in aliases):
+            return service_key
+    return None
+
+
+def is_chatbot_greeting(message: str) -> bool:
+    normalized_message = normalize_chatbot_text(message).strip()
+    return normalized_message in CHATBOT_GREETINGS
+
+
+def is_clinic_related_message(message: str) -> bool:
+    normalized_message = normalize_chatbot_text(message)
+    if not normalized_message.strip():
+        return False
+    if is_chatbot_greeting(message):
+        return True
+    return any(keyword in normalized_message for keyword in CHATBOT_CLINIC_KEYWORDS)
+
+
+def fetch_chatbot_doctors(service_key: str | None = None) -> list[sqlite3.Row]:
+    db = get_db()
+    if service_key:
+        return db.execute(
+            """
+            SELECT id, name, surname, procedure
+            FROM doctors
+            WHERE procedure = ?
+            ORDER BY surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
+            """,
+            (service_key,),
+        ).fetchall()
+
+    return db.execute(
+        """
+        SELECT id, name, surname, procedure
+        FROM doctors
+        ORDER BY procedure ASC, surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
+        """
+    ).fetchall()
+
+
+def fetch_chatbot_prices(service_label: str | None = None) -> list[sqlite3.Row]:
+    db = get_db()
+    if service_label:
+        return db.execute(
+            """
+            SELECT title, service_name, price
+            FROM prices
+            WHERE service_name = ?
+            ORDER BY id ASC
+            """,
+            (service_label,),
+        ).fetchall()
+
+    return db.execute(
+        """
+        SELECT title, service_name, price
+        FROM prices
+        ORDER BY service_name ASC, id ASC
+        """
+    ).fetchall()
+
+
+def build_doctor_listing_response(service_key: str | None) -> str:
+    if service_key:
+        doctors = fetch_chatbot_doctors(service_key)
+        service_label = CHATBOT_SERVICE_LABELS[service_key]
+        if not doctors:
+            return f"Šobrīd sistēmā vēl nav pievienotu ārstu procedūrai \"{service_label}\"."
+
+        names = ", ".join(
+            doctor_display_name(row["name"], row["surname"])
+            for row in doctors
+        )
+        return f"Procedūrai \"{service_label}\" šobrīd pieejami šādi ārsti: {names}."
+
+    grouped: dict[str, list[str]] = {}
+    for doctor in fetch_chatbot_doctors():
+        grouped.setdefault(doctor["procedure"], []).append(
+            doctor_display_name(doctor["name"], doctor["surname"])
+        )
+
+    if not grouped:
+        return "Šobrīd sistēmā vēl nav pievienotu ārstu saraksta."
+
+    parts = []
+    for service_key_item, service_label in CHATBOT_SERVICE_LABELS.items():
+        doctors = grouped.get(service_key_item, [])
+        if doctors:
+            parts.append(f"{service_label}: {', '.join(doctors)}")
+
+    if not parts:
+        return "Šobrīd sistēmā vēl nav pieejamas ārstu specializācijas."
+
+    return "Šobrīd klīnikā pieejamie ārsti ir: " + " | ".join(parts) + "."
+
+
+def build_price_response(service_key: str | None) -> str:
+    if service_key:
+        service_label = CHATBOT_SERVICE_LABELS[service_key]
+        prices = fetch_chatbot_prices(service_label)
+        if not prices:
+            return f"Šobrīd man nav cenu saraksta procedūrai \"{service_label}\"."
+
+        lines = [
+            f"{row['title']} {format_chatbot_price(row['price'])}"
+            for row in prices
+        ]
+        return f"Procedūras \"{service_label}\" cenas: " + " | ".join(lines) + "."
+
+    grouped: dict[str, list[str]] = {}
+    for row in fetch_chatbot_prices():
+        grouped.setdefault(row["service_name"], []).append(
+            f"{row['title']} {format_chatbot_price(row['price'])}"
+        )
+
+    if not grouped:
+        return "Šobrīd cenu saraksts nav pieejams."
+
+    preview_parts = []
+    for service_label in CHATBOT_SERVICE_LABELS.values():
+        service_prices = grouped.get(service_label, [])
+        if service_prices:
+            preview_parts.append(f"{service_label}: {service_prices[0]}")
+
+    if not preview_parts:
+        return "Šobrīd cenu saraksts nav pieejams."
+
+    return (
+        "Pieejamās cenas pēc kategorijām: "
+        + " | ".join(preview_parts)
+        + ". Ja vēlies, vari pajautāt arī par konkrētu procedūru."
+    )
+
+
+def build_services_response() -> str:
+    services = get_db().execute(
+        """
+        SELECT service_name, description
+        FROM services
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    if not services:
+        return "Šobrīd pakalpojumu saraksts nav pieejams."
+
+    return "Klīnikā pieejamie pakalpojumi: " + " | ".join(
+        f"{row['service_name']}: {resolve_service_description(row['service_name'], row['description'])}"
+        for row in services
+    ) + "."
+
+
+def build_appointment_rules_response() -> str:
+    return (
+        "Uz procedūru var pierakstīties tikai reģistrēts lietotājs. "
+        "Ārsta konts pierakstus veidot nevar. "
+        "Pieraksts iespējams līdz 3 mēnešiem uz priekšu, laikos ar 15 minūšu soli, "
+        "un katrai procedūrai vienam lietotājam vienlaikus var būt tikai viens aktīvs pieteikums. "
+        "Izvēloties procedūru, jāizvēlas arī tai atbilstošs ārsts."
+    )
+
+
+def build_profile_help_response() -> str:
+    return (
+        "Lietotāja kabinetā vari apskatīt un labot profila datus, nomainīt paroli, "
+        "apskatīt savus pieteikumus un atcelt pieteikumu. "
+        "Ārsta kabinetā ir pieejams profils, paroles maiņa un sadaļa \"Mani pieraksti\"."
+    )
+
+
+def build_contact_response() -> str:
+    return (
+        f"Klīnikas {CLINIC_NAME} galvenie kontakti: tālrunis {CLINIC_PHONE}, "
+        f"e-pasts {CLINIC_EMAIL}, galvenā adrese {CLINIC_MAIN_ADDRESS}. "
+        "Pieejamās filiāles: " + ", ".join(CLINIC_BRANCHES) + "."
+    )
+
+
+def build_working_hours_response() -> str:
+    return (
+        "Darba laiks ir šāds: pirmdiena līdz piektdiena 9:00-21:00, "
+        "sestdiena 10:00-20:00, svētdiena slēgts."
+    )
+
+
+def build_local_chatbot_response(message: str) -> tuple[str, bool]:
+    normalized_message = normalize_chatbot_text(message)
+    service_key = detect_chatbot_service_key(message)
+
+    if is_chatbot_greeting(message):
+        return (
+            "Sveiki! Esmu klīnikas Health and Care asistents. "
+            "Varu palīdzēt ar jautājumiem par pakalpojumiem, cenām, ārstiem, darba laiku, "
+            "filiālēm un pieraksta kārtību.",
+            True,
+        )
+
+    if any(keyword in normalized_message for keyword in ("darba laik", "strada", "atverts", "atver")):
+        return build_working_hours_response(), True
+
+    if any(keyword in normalized_message for keyword in ("kontakti", "talrun", "epast", "adrese", "atrod", "filial", "kur jus atrodat")):
+        return build_contact_response(), True
+
+    if any(keyword in normalized_message for keyword in ("cena", "cen", "maks", "izmaks", "eur")):
+        return build_price_response(service_key), True
+
+    if any(keyword in normalized_message for keyword in ("pakalpoj", "procedur", "ko jus piedavajat", "ko jus piedavat")):
+        return build_services_response(), True
+
+    if any(keyword in normalized_message for keyword in ("arst", "specialist", "dakter")):
+        return build_doctor_listing_response(service_key), True
+
+    if any(keyword in normalized_message for keyword in ("pierakst", "pieteikt", "rezerv", "vizit")):
+        return build_appointment_rules_response(), True
+
+    if any(keyword in normalized_message for keyword in ("profils", "parole", "kabinet", "mani pieteikumi", "mani pieraksti")):
+        return build_profile_help_response(), True
+
+    if any(keyword in normalized_message for keyword in ("registr", "ieiet", "konts", "lietotaj", "arsta kont")):
+        return (
+            "Lietotājs var reģistrēties un ieiet savā kontā, lai pieteiktos procedūrām. "
+            "Ārsts var ieiet savā ārsta kontā, kur redz savus pierakstus, bet ārsta konts pats pierakstus neveido.",
+            True,
+        )
+
+    return CHATBOT_FALLBACK_MESSAGE, False
+
+
+def build_clinic_chatbot_context() -> str:
+    services = get_db().execute(
+        """
+        SELECT service_name, description
+        FROM services
+        ORDER BY id ASC
+        """
+    ).fetchall()
+    prices = fetch_chatbot_prices()
+    doctors = fetch_chatbot_doctors()
+
+    service_lines = [
+        f"- {row['service_name']}: {resolve_service_description(row['service_name'], row['description'])}"
+        for row in services
+    ]
+    price_lines = [
+        f"- {row['service_name']}: {row['title']} {format_chatbot_price(row['price'])}"
+        for row in prices
+    ]
+    doctor_lines = [
+        f"- {CHATBOT_SERVICE_LABELS.get(row['procedure'], row['procedure'])}: {doctor_display_name(row['name'], row['surname'])}"
+        for row in doctors
+    ]
+
+    return "\n".join(
+        [
+            f"Klīnika: {CLINIC_NAME}",
+            f"Tālrunis: {CLINIC_PHONE}",
+            f"E-pasts: {CLINIC_EMAIL}",
+            f"Galvenā adrese: {CLINIC_MAIN_ADDRESS}",
+            "Filiāles: " + ", ".join(CLINIC_BRANCHES),
+            "Darba laiks: pirmdiena-piektdiena 9:00-21:00, sestdiena 10:00-20:00, svētdiena slēgts.",
+            "Pieraksta noteikumi: tikai reģistrēts lietotājs var pieteikties procedūrām; ārsta konts pierakstus neveido; pieraksts iespējams līdz 3 mēnešiem uz priekšu; pieejami tikai 15 minūšu laika sloti; vienam lietotājam vienlaikus var būt tikai viens aktīvs pieteikums katrai procedūrai; izvēloties procedūru, jāizvēlas arī tai atbilstošs ārsts.",
+            "Pieejamie pakalpojumi:",
+            *service_lines,
+            "Cenas:",
+            *price_lines,
+            "Ārsti:",
+            *doctor_lines,
+        ]
+    )
+
+
+def extract_openai_response_text(payload: dict[str, Any]) -> str:
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return ""
+
+    texts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+
+        for content_item in item.get("content", []):
+            if not isinstance(content_item, dict):
+                continue
+
+            if content_item.get("type") not in {"output_text", "text"}:
+                continue
+
+            text_value = content_item.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                texts.append(text_value.strip())
+                continue
+
+            if isinstance(text_value, dict):
+                nested_value = text_value.get("value")
+                if isinstance(nested_value, str) and nested_value.strip():
+                    texts.append(nested_value.strip())
+
+    return "\n".join(texts).strip()
+
+
+def call_openai_clinic_chatbot(message: str, history: list[dict[str, Any]]) -> str | None:
+    api_key = app.config.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return None
+
+    developer_prompt = (
+        "Tu esi klīnikas Health and Care mājaslapas asistents. "
+        "Atbildi tikai latviešu valodā un tikai par šo klīniku, tās pakalpojumiem, cenām, ārstiem, "
+        "filiālēm, darba laiku, profila/pieraksta plūsmu un vietnes lietošanu. "
+        "Ja jautājums nav par klīniku vai kontekstā nav atbildes, pieklājīgi atsaki un paskaidro, "
+        "ka vari palīdzēt tikai ar klīnikas tēmas jautājumiem. "
+        "Neizdomā faktus, balsties tikai uz tālāk doto kontekstu.\n\n"
+        + build_clinic_chatbot_context()
+    )
+
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "developer",
+            "content": developer_prompt,
+        }
+    ]
+
+    for item in history[-8:]:
+        if not isinstance(item, dict):
+            continue
+
+        role = str(item.get("role", "")).strip()
+        content = str(item.get("content", "")).strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+
+        messages.append(
+            {
+                "role": role,
+                "content": content[:1000],
+            }
+        )
+
+    messages.append(
+        {
+            "role": "user",
+            "content": message[:1200],
+        }
+    )
+
+    request_payload = {
+        "model": app.config["OPENAI_CHAT_MODEL"],
+        "input": messages,
+        "temperature": 0.2,
+    }
+
+    request_data = json.dumps(request_payload).encode("utf-8")
+    request_object = urllib_request.Request(
+        "https://api.openai.com/v1/responses",
+        data=request_data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(request_object, timeout=25) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError:
+        return None
+    except urllib_error.URLError:
+        return None
+    except TimeoutError:
+        return None
+
+    reply = extract_openai_response_text(payload)
+    return reply or None
 
 
 def now_iso() -> str:
@@ -332,6 +866,15 @@ def clean_html_text(value: str) -> str:
     return html.unescape(re.sub(r"\s+", " ", value).strip())
 
 
+def normalize_public_asset_path(value: str) -> str:
+    path = (value or "").strip()
+    if not path:
+        return ""
+    if path.startswith(("http://", "https://", "/")):
+        return path
+    return "/" + path.lstrip("./")
+
+
 def normalize_lookup(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
     return normalized.encode("ascii", "ignore").decode("ascii").lower()
@@ -418,6 +961,89 @@ def load_catalog_data() -> tuple[list[tuple[str, str]], list[tuple[str, str, flo
     return services, prices
 
 
+def load_about_data() -> list[dict[str, Any]]:
+    about_path = BASE_DIR / "parmums.html"
+    if not about_path.exists():
+        return FALLBACK_ABOUT_CONTENT
+
+    text = about_path.read_text(encoding="utf-8")
+    sections = re.findall(
+        r'<section[^>]*class="[^"]*parmumsContent[^"]*"[^>]*>(.*?)</section>',
+        text,
+        re.S,
+    )
+
+    page_title_match = re.search(
+        r'<h1[^>]*class="[^"]*parmumsTitle[^"]*"[^>]*>(.*?)</h1>',
+        text,
+        re.S,
+    )
+    page_title = clean_html_text(page_title_match.group(1)) if page_title_match else FALLBACK_ABOUT_PAGE_TITLE
+
+    content_rows: list[dict[str, Any]] = [
+        {
+            "entry_type": "page_title",
+            "title": page_title or FALLBACK_ABOUT_PAGE_TITLE,
+            "content": "",
+            "content_format": "text",
+            "image_path": "",
+            "image_alt": "",
+            "sort_order": 0,
+        }
+    ]
+
+    for index, section_html in enumerate(sections, start=1):
+        title_match = re.search(r"<h2[^>]*>(.*?)</h2>", section_html, re.S)
+        title = clean_html_text(title_match.group(1)) if title_match else f"Sadaļa {index}"
+
+        image_match = re.search(
+            r'<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"',
+            section_html,
+            re.S,
+        )
+        image_path = normalize_public_asset_path(image_match.group(1)) if image_match else ""
+        image_alt = clean_html_text(image_match.group(2)) if image_match else title
+
+        list_items = re.findall(r"<li[^>]*>(.*?)</li>", section_html, re.S)
+        if list_items:
+            content = "\n".join(clean_html_text(item) for item in list_items if clean_html_text(item))
+            content_format = "list"
+        else:
+            paragraphs = [
+                clean_html_text(item)
+                for item in re.findall(r"<p[^>]*>(.*?)</p>", section_html, re.S)
+                if clean_html_text(item)
+            ]
+            content = " ".join(paragraphs)
+            content_format = "paragraph"
+
+        content_rows.append(
+            {
+                "entry_type": "section",
+                "title": title,
+                "content": content,
+                "content_format": content_format,
+                "image_path": image_path,
+                "image_alt": image_alt,
+                "sort_order": index,
+            }
+        )
+
+    has_placeholder_content = any(
+        item["entry_type"] == "section"
+        and (
+            item["title"].startswith("Sadaļa ")
+            or "Ielādējam sadaļu" in item["content"]
+        )
+        for item in content_rows
+    )
+
+    if len(content_rows) <= 1 or has_placeholder_content:
+        return FALLBACK_ABOUT_CONTENT
+
+    return content_rows
+
+
 def get_db() -> sqlite3.Connection:
     if "db" not in g:
         connection = sqlite3.connect(DB_PATH)
@@ -438,6 +1064,7 @@ def init_db() -> None:
     connection = sqlite3.connect(DB_PATH)
     connection.execute("PRAGMA foreign_keys = ON")
     services_seed, prices_seed = load_catalog_data()
+    about_seed = load_about_data()
 
     connection.executescript(
         """
@@ -498,6 +1125,32 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS contact_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_role TEXT NOT NULL DEFAULT 'guest',
+            user_id INTEGER,
+            doctor_id INTEGER,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS par_mums (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            content_format TEXT NOT NULL DEFAULT 'paragraph',
+            image_path TEXT NOT NULL DEFAULT '',
+            image_alt TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """
     )
 
@@ -507,6 +1160,36 @@ def init_db() -> None:
     }
     if "doctor_id" not in appointment_columns:
         connection.execute("ALTER TABLE appointments ADD COLUMN doctor_id INTEGER")
+
+    legacy_about_table = connection.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'about_content'
+        """
+    ).fetchone()
+    if legacy_about_table is not None:
+        legacy_about_rows = connection.execute(
+            """
+            SELECT entry_type, title, content, content_format, image_path, image_alt, sort_order, created_at, updated_at
+            FROM about_content
+            ORDER BY sort_order ASC, id ASC
+            """
+        ).fetchall()
+        current_about_count = connection.execute("SELECT COUNT(*) FROM par_mums").fetchone()[0]
+
+        if current_about_count == 0 and legacy_about_rows:
+            connection.executemany(
+                """
+                INSERT INTO par_mums (
+                    entry_type, title, content, content_format, image_path, image_alt, sort_order, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                legacy_about_rows,
+            )
+
+        connection.execute("DROP TABLE about_content")
 
     service_count = connection.execute("SELECT COUNT(*) FROM services").fetchone()[0]
     if service_count == 0:
@@ -530,6 +1213,48 @@ def init_db() -> None:
             [
                 (title, service_name, price, timestamp, timestamp)
                 for title, service_name, price in prices_seed
+            ],
+        )
+
+    about_rows = connection.execute(
+        "SELECT entry_type, title, content FROM par_mums ORDER BY sort_order ASC, id ASC"
+    ).fetchall()
+    should_reset_about_content = (
+        not about_rows
+        or (
+            len(about_rows) <= 2
+            and any(
+                row[1].startswith("Sadaļa ")
+                or "Ielādējam sadaļu" in (row[2] or "")
+                for row in about_rows
+                if row[0] == "section"
+            )
+        )
+    )
+
+    if should_reset_about_content:
+        connection.execute("DELETE FROM par_mums")
+        timestamp = now_iso()
+        connection.executemany(
+            """
+            INSERT INTO par_mums (
+                entry_type, title, content, content_format, image_path, image_alt, sort_order, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    item["entry_type"],
+                    item["title"],
+                    item["content"],
+                    item["content_format"],
+                    item["image_path"],
+                    item["image_alt"],
+                    item["sort_order"],
+                    timestamp,
+                    timestamp,
+                )
+                for item in about_seed
             ],
         )
 
@@ -971,6 +1696,43 @@ def api_catalog() -> Any:
     return jsonify(catalog)
 
 
+@app.get("/api/about")
+def api_about() -> Any:
+    rows = get_db().execute(
+        """
+        SELECT *
+        FROM par_mums
+        ORDER BY sort_order ASC, id ASC
+        """
+    ).fetchall()
+
+    page_title = FALLBACK_ABOUT_PAGE_TITLE
+    sections: list[dict[str, Any]] = []
+
+    for row in rows:
+        item = row_to_dict(row)
+        if item["entry_type"] == "page_title":
+            page_title = item["title"] or FALLBACK_ABOUT_PAGE_TITLE
+            continue
+
+        sections.append(item)
+
+    if not rows:
+        page_title = FALLBACK_ABOUT_PAGE_TITLE
+        sections = [
+            item
+            for item in FALLBACK_ABOUT_CONTENT
+            if item["entry_type"] == "section"
+        ]
+
+    return jsonify(
+        {
+            "page_title": page_title,
+            "sections": sections,
+        }
+    )
+
+
 @app.get("/api/doctors")
 @patient_required
 def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
@@ -991,6 +1753,106 @@ def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
         (procedura,),
     ).fetchall()
     return jsonify([public_doctor_option_dict(row) for row in rows])
+
+
+@app.post("/api/chatbot")
+def api_chatbot() -> Any:
+    payload = request.get_json(silent=True) or {}
+    message = str(payload.get("message", "")).strip()
+    history = payload.get("history")
+
+    if not message:
+        return jsonify({"error": "Ziņa nedrīkst būt tukša."}), 400
+
+    if len(message) > 1200:
+        message = message[:1200]
+
+    if not is_clinic_related_message(message):
+        return jsonify({"reply": CHATBOT_OFF_TOPIC_MESSAGE, "source": "local"})
+
+    history_items = history if isinstance(history, list) else []
+    local_reply, _ = build_local_chatbot_response(message)
+
+    openai_reply = call_openai_clinic_chatbot(message, history_items)
+    if openai_reply:
+        return jsonify({"reply": openai_reply, "source": "openai"})
+
+    return jsonify({"reply": local_reply, "source": "local"})
+
+
+@app.post("/api/contact-messages")
+def api_create_contact_message() -> Any:
+    payload = request.get_json(silent=True) or {}
+    account = current_account()
+
+    message = str(payload.get("message", "")).strip()
+    if not message:
+        return jsonify({"error": "Ziņojums ir obligāts."}), 400
+
+    if len(message) > 2000:
+        return jsonify({"error": "Ziņojums ir pārāk garš."}), 400
+
+    sender_role = "guest"
+    user_id: int | None = None
+    doctor_id: int | None = None
+
+    if account is not None:
+        name = " ".join(
+            part.strip()
+            for part in [str(account.get("name", "")), str(account.get("surname", ""))]
+            if str(part).strip()
+        )
+        email = str(account.get("email", "")).strip().lower()
+        sender_role = str(account.get("role", "guest")).strip() or "guest"
+        if sender_role == "user":
+            user_id = int(account["id"])
+        elif sender_role == "doctor":
+            doctor_id = int(account["id"])
+    else:
+        name = str(payload.get("name", "")).strip()
+        email = str(payload.get("email", "")).strip().lower()
+
+    if not name:
+        return jsonify({"error": "Vārds ir obligāts."}), 400
+
+    if not email:
+        return jsonify({"error": "E-pasts ir obligāts."}), 400
+
+    email_pattern = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    if not email_pattern.match(email):
+        return jsonify({"error": "Lūdzu ievadiet korektu e-pastu."}), 400
+
+    db = get_db()
+    timestamp = now_iso()
+    cursor = db.execute(
+        """
+        INSERT INTO contact_messages (
+            sender_role, user_id, doctor_id, name, email, message, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            sender_role,
+            user_id,
+            doctor_id,
+            name,
+            email,
+            message,
+            timestamp,
+        ),
+    )
+    db.commit()
+
+    saved_message = db.execute(
+        "SELECT * FROM contact_messages WHERE id = ?",
+        (cursor.lastrowid,),
+    ).fetchone()
+    return jsonify(
+        {
+            "message": "Ziņojums veiksmīgi nosūtīts.",
+            "contact_message": row_to_dict(saved_message),
+        }
+    ), 201
 
 
 @app.post("/api/update-password")
@@ -1358,6 +2220,117 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
 
     updated_doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
     return jsonify(public_doctor_dict(updated_doctor))
+
+
+@app.get("/api/admin/about-content")
+@admin_required
+def api_admin_about_content() -> Any:
+    rows = get_db().execute(
+        """
+        SELECT *
+        FROM par_mums
+        ORDER BY sort_order ASC, id ASC
+        """
+    ).fetchall()
+    return jsonify([row_to_dict(row) for row in rows])
+
+
+@app.put("/api/admin/about-content/<int:entry_id>")
+@admin_required
+def api_admin_update_about_content(entry_id: int) -> Any:
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title", "")).strip()
+    content = str(payload.get("content", "")).strip()
+    content_format = str(payload.get("content_format", "paragraph")).strip().lower()
+    image_path = normalize_public_asset_path(str(payload.get("image_path", "")).strip())
+    image_alt = str(payload.get("image_alt", "")).strip()
+    raw_sort_order = payload.get("sort_order", 0)
+
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+
+    if content_format not in {"text", "paragraph", "list"}:
+        return jsonify({"error": "Invalid content format"}), 400
+
+    try:
+        sort_order = int(raw_sort_order)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Sort order must be a number"}), 400
+
+    db = get_db()
+    entry = db.execute(
+        "SELECT * FROM par_mums WHERE id = ?",
+        (entry_id,),
+    ).fetchone()
+    if entry is None:
+        return jsonify({"error": "About content entry not found"}), 404
+
+    entry_type = entry["entry_type"]
+    if entry_type == "page_title":
+        content = ""
+        content_format = "text"
+        image_path = ""
+        image_alt = ""
+        sort_order = 0
+    else:
+        if not content:
+            return jsonify({"error": "Content is required"}), 400
+        if not image_alt:
+            image_alt = title
+
+    db.execute(
+        """
+        UPDATE par_mums
+        SET title = ?, content = ?, content_format = ?, image_path = ?, image_alt = ?, sort_order = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            title,
+            content,
+            content_format,
+            image_path,
+            image_alt,
+            sort_order,
+            now_iso(),
+            entry_id,
+        ),
+    )
+    db.commit()
+
+    updated_entry = db.execute(
+        "SELECT * FROM par_mums WHERE id = ?",
+        (entry_id,),
+    ).fetchone()
+    return jsonify(row_to_dict(updated_entry))
+
+
+@app.get("/api/admin/contact-messages")
+@admin_required
+def api_admin_contact_messages() -> Any:
+    rows = get_db().execute(
+        """
+        SELECT *
+        FROM contact_messages
+        ORDER BY created_at DESC, id DESC
+        """
+    ).fetchall()
+    return jsonify([row_to_dict(row) for row in rows])
+
+
+@app.delete("/api/admin/contact-messages/<int:message_id>")
+@admin_required
+def api_admin_delete_contact_message(message_id: int) -> Any:
+    db = get_db()
+    existing_message = db.execute(
+        "SELECT id FROM contact_messages WHERE id = ?",
+        (message_id,),
+    ).fetchone()
+    if existing_message is None:
+        return jsonify({"error": "Ziņojums nav atrasts."}), 404
+
+    db.execute("DELETE FROM contact_messages WHERE id = ?", (message_id,))
+    db.commit()
+    return jsonify({"message": "Ziņojums dzēsts."})
 
 
 @app.get("/api/admin/services")

@@ -79,6 +79,9 @@ async function cancelMyAppointment(appointmentId) {
 
 async function logoutUser() {
     await fetch("/api/logout", { method: "POST" });
+    if (typeof window.clearClinicChatbotConversation === "function") {
+        window.clearClinicChatbotConversation();
+    }
     window.location.href = "index.html";
 }
 

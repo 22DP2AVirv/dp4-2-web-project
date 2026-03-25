@@ -1,60 +1,232 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="lv">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Medicīnas centrs</title>
+    <title>Privātuma politika | Health and Care</title>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/fontawesome.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/brands.min.css" rel="stylesheet">
-    <link href="/assets/awesome/css/solid.css" rel="stylesheet"> 
+    <link href="/assets/awesome/css/solid.css" rel="stylesheet">
 </head>
-<header>
-    <div class="container-md">
-        <div class="navbar">
-            <span class="logo-link" onclick="window.location.href='index.html';">
-                <img src="/images/medicina.webp" alt="Medicīnas centra logo" class="logo">
-            </span>
-            <div class="dark-mode-toggle">
-                <button id="registracija" onclick="window.location.href='registracija.html'">Reģistrācija</button>
-                <button id="dark-mode-btn">Tumsas režīms</button>        
-            </div>
-            <div class="menu">
-                <li class="nav-item">
-                    <a href="index.html"><i class="fa-solid fa-house"></i>Sākums </a>
-                </li>
-                <li>
-                    <a href="parmums.html"><i class="fas fa-info-circle"></i>Par mums </a>
-                </li>
+<body>
+    <header>
+        <div class="container-md">
+            <div class="navbar">
+                <span class="logo-link" onclick="window.location.href='index.html';">
+                    <img src="/images/medicina.webp" alt="Medicīnas centra logo" class="logo">
+                </span>
+                <div class="dark-mode-toggle">
+                    <button id="registracija" onclick="window.location.href='registracija.html'">Ieiet</button>
+                    <button id="dark-mode-btn">Tumsas režīms</button>
+                </div>
+                <div class="menu">
+                    <li class="nav-item">
+                        <a href="index.html"><i class="fa-solid fa-house"></i>Sākums </a>
+                    </li>
+                    <li>
+                        <a href="parmums.html"><i class="fas fa-info-circle"></i>Par mums </a>
+                    </li>
                     <div class="dropdown">
                         <a href="#"><i class="fas fa-caret-down"></i>Izvēlne </a>
-                    <div class="dropdown-content">
-                        <li class="nav-item">
-                            <a class="nav-link" href="cenas.html">Cenas</a>
-                        </li>
-                        <a href="pakalpojumi.html">Pakalpojumi</a>
+                        <div class="dropdown-content">
+                            <li class="nav-item">
+                                <a class="nav-link" href="cenas.html">Cenas</a>
+                            </li>
+                            <a href="pakalpojumi.html">Pakalpojumi</a>
+                        </div>
                     </div>
+                    <li>
+                        <a href="kontakti.html"><i class="fas fa-envelope"></i>Kontakti </a>
+                    </li>
                 </div>
-                <li>
-                    <a href="kontakti.html"><i class="fas fa-envelope"></i>Kontakti </a>
-                </li>
-            </div>
-            <div class="hamburger" onclick="toggleMenu()">
-                <i class="fas fa-bars"></i>
+                <div class="hamburger" onclick="toggleMenu()">
+                    <i class="fas fa-bars"></i>
+                </div>
             </div>
         </div>
-    </div>
-</header>
-<body>
-    <div class="container-md">
-        <div class="cards-container" id="pakalpojumi">
-            <div class="privacy-title">
-                <h2>Privātuma politika</h2>
-            </div>
+    </header>
+
+    <main class="privacy-page">
+        <div class="container-md">
+            <section class="privacy-hero">
+                <div class="privacy-title">
+                    <h1>Privātuma politika</h1>
+                </div>
+                <p class="privacy-lead">
+                    Health and Care rūpējas par Jūsu privātumu un personas datu drošību. Šajā lapā
+                    paskaidrojam, kādus datus mēs apstrādājam, kāpēc tie ir nepieciešami, cik ilgi tos
+                    glabājam un kādas ir Jūsu tiesības, izmantojot mūsu mājaslapu, reģistrācijas formas,
+                    pieteikumu sistēmu, kontaktu formu un AI čatbotu.
+                </p>
+                <div class="privacy-meta">
+                    <span>Pēdējo reizi atjaunota: 2026. gada 25. martā</span>
+                    <span>Attiecas uz viesiem, lietotājiem un ārstiem</span>
+                </div>
+            </section>
+
+            <section class="row privacy-summary">
+                <div class="col-md-4 mb-4">
+                    <article class="privacy-summary-card">
+                        <h3>Kādus datus mēs vācam?</h3>
+                        <p>
+                            Vārdu, uzvārdu, tālruni, e-pastu, pieraksta informāciju, ziņojumus no kontaktu
+                            formas un tehniskus vietnes lietošanas datus.
+                        </p>
+                    </article>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <article class="privacy-summary-card">
+                        <h3>Kāpēc tie ir vajadzīgi?</h3>
+                        <p>
+                            Lai nodrošinātu kontu darbību, pierakstus pie speciālistiem, saziņu ar klientiem,
+                            mājaslapas drošību un ērtāku vietnes lietošanu.
+                        </p>
+                    </article>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <article class="privacy-summary-card">
+                        <h3>Kā mēs tos sargājam?</h3>
+                        <p>
+                            Dati tiek glabāti sistēmā ar ierobežotu piekļuvi, un piekļuve tiem tiek piešķirta
+                            tikai tiem darbiniekiem vai administratoriem, kam tā ir nepieciešama darba veikšanai.
+                        </p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="privacy-grid">
+                <article class="privacy-card">
+                    <h2>1. Personas datu pārzinis</h2>
+                    <p>
+                        Personas datu pārzinis ir medicīnas centrs <strong>Health and Care</strong>, kas
+                        nodrošina šo mājaslapu un saistītos pakalpojumus.
+                    </p>
+                    <ul class="privacy-list">
+                        <li>Adrese: Lidoņu iela 13, Rīga, LV-1055</li>
+                        <li>Tālrunis: +371 22351340</li>
+                        <li>E-pasts: info@healthandcare.lv</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>2. Kādu informāciju mēs apstrādājam</h2>
+                    <p>Mēs varam apstrādāt šādu informāciju, atkarībā no tā, kā izmantojat vietni:</p>
+                    <ul class="privacy-list">
+                        <li>reģistrācijas datus: vārds, uzvārds, tālrunis, e-pasts, parole;</li>
+                        <li>ārsta konta datus: specializācija vai procedūras kategorija;</li>
+                        <li>pieraksta datus: procedūra, ārsts, datums, laiks, komentārs;</li>
+                        <li>kontaktformas ziņojumus un ar tiem saistīto kontaktinformāciju;</li>
+                        <li>tehniskus datus par sesiju, tumšo režīmu un vietnes darbību.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>3. Datu apstrādes mērķi</h2>
+                    <p>Jūsu dati tiek izmantoti tikai skaidri noteiktiem un ar klīnikas darbību saistītiem mērķiem:</p>
+                    <ul class="privacy-list">
+                        <li>lietotāja vai ārsta konta izveidei un uzturēšanai;</li>
+                        <li>pierakstu rezervēšanai, pārvaldībai un atcelšanai;</li>
+                        <li>lai administrators varētu redzēt un apstrādāt pieteikumus un ziņojumus;</li>
+                        <li>lai atbildētu uz jautājumiem, kas iesūtīti caur kontaktu formu;</li>
+                        <li>vietnes funkcionalitātes, drošības un kvalitātes nodrošināšanai.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>4. Cik ilgi dati tiek glabāti</h2>
+                    <p>
+                        Datus glabājam tik ilgi, cik tas ir nepieciešams pakalpojuma sniegšanai, konta
+                        uzturēšanai vai normatīvo prasību izpildei.
+                    </p>
+                    <ul class="privacy-list">
+                        <li>konta dati tiek glabāti, kamēr konts ir aktīvs;</li>
+                        <li>pierakstu dati tiek glabāti, lai nodrošinātu pakalpojuma izpildi un administrēšanu;</li>
+                        <li>kontaktformas ziņojumi tiek glabāti, kamēr tie ir nepieciešami saziņai un apkalpošanai;</li>
+                        <li>tehniskie sesijas dati tiek glabāti īslaicīgi un atkarīgi no pārlūka sesijas.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>5. Kam dati var tikt nodoti</h2>
+                    <p>
+                        Mēs nepārdodam Jūsu personas datus trešajām personām. Dati var būt pieejami tikai:
+                    </p>
+                    <ul class="privacy-list">
+                        <li>klīnikas administratoriem un atbildīgajiem darbiniekiem;</li>
+                        <li>attiecīgajam ārstam, ja tas nepieciešams Jūsu pieraksta nodrošināšanai;</li>
+                        <li>tehniskajiem pakalpojumu sniedzējiem, ja tas nepieciešams sistēmas darbībai;</li>
+                        <li>valsts iestādēm, ja to paredz normatīvie akti.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>6. Jūsu tiesības</h2>
+                    <p>
+                        Jums ir tiesības pieprasīt informāciju par to, kādi Jūsu dati tiek apstrādāti, un
+                        nepieciešamības gadījumā lūgt tos precizēt vai dzēst.
+                    </p>
+                    <ul class="privacy-list">
+                        <li>saņemt informāciju par savu datu apstrādi;</li>
+                        <li>labot neprecīzus vai novecojušus datus;</li>
+                        <li>pieprasīt dzēšanu, ja datu glabāšanai vairs nav pamata;</li>
+                        <li>iebilst pret noteiktu apstrādi vai lūgt to ierobežot;</li>
+                        <li>vajadzības gadījumā vērsties pie uzraugošajām institūcijām.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>7. Sīkdatnes un tehniskie dati</h2>
+                    <p>
+                        Vietne var izmantot tehniskās sīkdatnes un lokāli saglabātus pārlūka datus, lai
+                        nodrošinātu pamatfunkcijas, piemēram, sesiju, tumšā režīma izvēli un citas ērtības.
+                    </p>
+                    <p>
+                        Šie dati netiek izmantoti agresīvai profilēšanai, bet gan vietnes darbības un lietošanas
+                        pieredzes uzlabošanai.
+                    </p>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>8. AI čatbots</h2>
+                    <p>
+                        Mūsu mājaslapā pieejamais AI čatbots ir paredzēts tikai jautājumiem par klīniku,
+                        pakalpojumiem, darba laiku, cenām un saziņu. Čatbots nav paredzēts medicīniskai
+                        diagnostikai vai neatliekamai palīdzībai.
+                    </p>
+                    <ul class="privacy-list">
+                        <li>lūdzam čatā neievadīt īpaši sensitīvus veselības datus;</li>
+                        <li>sarunas vēsture tiek uzturēta tikai sesijas ietvaros;</li>
+                        <li>izrakstoties no konta vai ieejot citā kontā, čata sarakste tiek notīrīta.</li>
+                    </ul>
+                </article>
+
+                <article class="privacy-card">
+                    <h2>9. Drošība un izmaiņas politikā</h2>
+                    <p>
+                        Mēs veicam saprātīgus tehniskus un organizatoriskus pasākumus, lai aizsargātu Jūsu
+                        datus pret nesankcionētu piekļuvi, nozaudēšanu, izmainīšanu vai izpaušanu.
+                    </p>
+                    <p>
+                        Ja šī privātuma politika tiks mainīta, aktuālā versija vienmēr būs pieejama šajā lapā.
+                        Būtisku izmaiņu gadījumā tās stāsies spēkā pēc publicēšanas mājaslapā.
+                    </p>
+                </article>
+            </section>
+
+            <section class="privacy-contact-card">
+                <h2>Jautājumi par privātumu?</h2>
+                <p>
+                    Ja Jums ir jautājumi par personas datu apstrādi, pierakstiem, konta informāciju vai
+                    šo privātuma politiku, sazinieties ar mums pa tālruni <strong>+371 22351340</strong>
+                    vai rakstiet uz <strong>info@healthandcare.lv</strong>.
+                </p>
+                <a class="privacy-link-button" href="kontakti.html">Atvērt kontaktu lapu</a>
+            </section>
         </div>
-    </div>
+    </main>
 
     <footer class="footer">
         <div class="container-md">
@@ -82,7 +254,7 @@
                         <a href=""><i class="fab fa-instagram"></i></a>
                         <a href=""><i class="fab fa-twitter"></i></a>
                     </div>
-                    <p>&copy; 2024 Aleksis Virvinskis. Visas tiesības aizsargātas.</p>
+                    <p>&copy; 2026 Aleksis Virvinskis. Visas tiesības aizsargātas.</p>
                 </div>
                 <div id="rightFooterMenu" class="col-md-4 right-column">
                     <a href="pakalpojumi.html">
@@ -92,7 +264,7 @@
                         <button class="price">Cenas</button>
                     </a>
                     <a href="privatuma-politika.html">
-                    <button class="privacy">Privātuma politika</button>
+                        <button class="privacy">Privātuma politika</button>
                     </a>
                     <a href="registracija.html">
                         <button class="Logins">Log in / Sign up</button>
@@ -101,6 +273,7 @@
             </div>
         </div>
     </footer>
+
     <div id="workTimeModal" class="work-time-modal">
         <div class="modal-content">
             <span class="close" onclick="closeWorkTime()">&times;</span>

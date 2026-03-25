@@ -4,6 +4,23 @@ function safeText(value) {
     return div.innerHTML;
 }
 
+function resolveCardAction(service, container) {
+    const mode = container.dataset.cardMode || "details";
+    const meta = service.public_meta || {};
+
+    if (mode === "appointment") {
+        return {
+            href: "pieteikties.html",
+            label: "Pieteikties"
+        };
+    }
+
+    return {
+        href: meta.detail_page || "pieteikties.html",
+        label: meta.button_label || "Pieteikties"
+    };
+}
+
 async function loadServices() {
     const container = document.getElementById("serviceCards");
     if (!container) {
@@ -26,8 +43,7 @@ async function loadServices() {
         container.innerHTML = catalog.map((service) => {
             const meta = service.public_meta || {};
             const imagePath = meta.image_path || "/images/medicina.webp";
-            const detailPage = meta.detail_page || "pieteikties.html";
-            const buttonLabel = meta.button_label || "Pieteikties";
+            const action = resolveCardAction(service, container);
 
             return `
                 <div class="col-md-4 d-flex justify-content-center">
@@ -36,8 +52,8 @@ async function loadServices() {
                         <div class="card-content">
                             <h3>${safeText(service.service_name)}</h3>
                             <p>${safeText(service.description || "Plašāka informācija pieejama pie mūsu speciālistiem.")}</p>
-                            <a href="${safeText(detailPage)}">
-                                <button>${safeText(buttonLabel)}</button>
+                            <a href="${safeText(action.href)}">
+                                <button>${safeText(action.label)}</button>
                             </a>
                         </div>
                     </div>

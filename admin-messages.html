@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin panelis - Ziņojumi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/admin-style.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-brand">
+                <p class="admin-kicker">Health and Care</p>
+                <h1>Admin panelis</h1>
+                <p>Pārvaldi kontus, saturu, cenas, ziņojumus un pacientu pieteikumus vienuviet.</p>
+            </div>
+
+            <div class="admin-sidebar-tools">
+                <button type="button" class="admin-theme-button" data-admin-theme-toggle>Tumšais režīms</button>
+            </div>
+
+            <nav class="admin-nav">
+                <a class="admin-nav-link" href="admin-users.html">Lietotāju saraksts</a>
+                <a class="admin-nav-link" href="admin-doctors.html">Ārstu saraksts</a>
+                <a class="admin-nav-link" href="admin-services.html">Pakalpojumi</a>
+                <a class="admin-nav-link" href="admin-prices.html">Cenas</a>
+                <a class="admin-nav-link" href="admin-about.html">Satura pārvaldība</a>
+                <a class="admin-nav-link is-active" href="admin-messages.html">Ziņojumi</a>
+                <a class="admin-nav-link" href="pieteikumi-adm.html">Pieteikumu saraksts</a>
+                <a class="admin-nav-link admin-nav-link--logout" href="#" data-admin-logout>Izlogoties</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-page-header">
+                <div>
+                    <span class="admin-page-tag">Saziņa</span>
+                    <h1>Ziņojumi</h1>
+                    <p>Šeit redzami visi ziņojumi no kontaktu formas, neatkarīgi no tā, vai tos sūtījis viesis, lietotājs vai ārsts.</p>
+                </div>
+            </header>
+
+            <section class="admin-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <h2>Saņemtie ziņojumi</h2>
+                        <p>Ja ziņojums vairs nav nepieciešams, to vari izdzēst no saraksta.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <label class="admin-sorter" for="messageSort">
+                            Sakārtot datus pēc:
+                            <select id="messageSort" class="form-select">
+                                <option value="az">A-Z</option>
+                                <option value="za">Z-A</option>
+                                <option value="newest" selected>Jaunākie ieraksti</option>
+                                <option value="oldest">Vecākie ieraksti</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="table-responsive admin-table-wrap">
+                    <table class="table admin-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Loma</th>
+                                <th>Vārds</th>
+                                <th>E-pasts</th>
+                                <th>Ziņojums</th>
+                                <th>Datums</th>
+                                <th>Darbības</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contactMessageList"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/assets/js/admin-theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/assets/js/admin.js"></script>
+</body>
+</html>

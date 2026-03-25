@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin panelis - Ārsti</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/admin-style.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-brand">
+                <p class="admin-kicker">Health and Care</p>
+                <h1>Admin panelis</h1>
+                <p>Pārvaldi kontus, saturu, cenas, ziņojumus un pacientu pieteikumus vienuviet.</p>
+            </div>
+
+            <div class="admin-sidebar-tools">
+                <button type="button" class="admin-theme-button" data-admin-theme-toggle>Tumšais režīms</button>
+            </div>
+
+            <nav class="admin-nav">
+                <a class="admin-nav-link" href="admin-users.html">Lietotāju saraksts</a>
+                <a class="admin-nav-link is-active" href="admin-doctors.html">Ārstu saraksts</a>
+                <a class="admin-nav-link" href="admin-services.html">Pakalpojumi</a>
+                <a class="admin-nav-link" href="admin-prices.html">Cenas</a>
+                <a class="admin-nav-link" href="admin-about.html">Satura pārvaldība</a>
+                <a class="admin-nav-link" href="admin-messages.html">Ziņojumi</a>
+                <a class="admin-nav-link" href="pieteikumi-adm.html">Pieteikumu saraksts</a>
+                <a class="admin-nav-link admin-nav-link--logout" href="#" data-admin-logout>Izlogoties</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-page-header">
+                <div>
+                    <span class="admin-page-tag">Medicīnas personāls</span>
+                    <h1>Ārsti</h1>
+                    <p>Šeit vari pārvaldīt visus ārstu kontus, viņu kontaktinformāciju un piesaistītās procedūras.</p>
+                </div>
+            </header>
+
+            <section class="admin-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <h2>Ārstu saraksts</h2>
+                        <p>Ārstu konti ar piesaistītajām procedūrām, kurus vari rediģēt, papildināt vai dzēst.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <label class="admin-sorter" for="doctorSort">
+                            Sakārtot datus pēc:
+                            <select id="doctorSort" class="form-select">
+                                <option value="az">A-Z</option>
+                                <option value="za">Z-A</option>
+                                <option value="newest">Jaunākie ieraksti</option>
+                                <option value="oldest" selected>Vecākie ieraksti</option>
+                            </select>
+                        </label>
+                        <button id="addDoctorBtn" class="btn btn-primary">Pievienot ārstu</button>
+                    </div>
+                </div>
+
+                <div class="table-responsive admin-table-wrap">
+                    <table class="table admin-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Vārds</th>
+                                <th>E-pasts</th>
+                                <th>Tālrunis</th>
+                                <th>Procedūra</th>
+                                <th>Reģistrācijas datums</th>
+                                <th>Izmaiņu datums</th>
+                                <th>Darbības</th>
+                            </tr>
+                        </thead>
+                        <tbody id="doctorList"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal fade admin-modal" id="doctorModal" tabindex="-1" aria-labelledby="doctorModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title h4 mb-1" id="doctorModalTitle">Pievienot ārstu</h2>
+                        <p class="admin-modal-subtitle mb-0" id="doctorModalSubtitle">Aizpildi ārsta datus un saglabā izmaiņas.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Aizvērt"></button>
+                </div>
+                <form id="doctorModalForm" novalidate>
+                    <div class="modal-body">
+                        <div id="doctorModalMessage" class="alert alert-danger d-none" role="alert"></div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="doctorModalName" class="form-label">Vārds</label>
+                                <input type="text" class="form-control" id="doctorModalName" required>
+                                <div class="invalid-feedback">Lūdzu ievadi ārsta vārdu.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalSurname" class="form-label">Uzvārds</label>
+                                <input type="text" class="form-control" id="doctorModalSurname">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalEmail" class="form-label">E-pasts</label>
+                                <input type="email" class="form-control" id="doctorModalEmail" required>
+                                <div class="invalid-feedback">Lūdzu ievadi korektu e-pastu.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalPhone" class="form-label">Tālrunis</label>
+                                <input type="text" class="form-control" id="doctorModalPhone">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalProcedure" class="form-label">Procedūra</label>
+                                <select id="doctorModalProcedure" class="form-select" required>
+                                    <option value="">Izvēlies procedūru</option>
+                                    <option value="datortomografija">Datortomogrāfija</option>
+                                    <option value="gimenesArsts">Ģimenes ārsts</option>
+                                    <option value="vakcinacija">Vakcinācija</option>
+                                </select>
+                                <div class="invalid-feedback">Lūdzu izvēlies procedūru.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalPassword" class="form-label" id="doctorModalPasswordLabel">Parole</label>
+                                <input type="password" class="form-control" id="doctorModalPassword" required>
+                                <div class="invalid-feedback">Lūdzu ievadi paroli.</div>
+                                <div class="form-text" id="doctorModalPasswordHint">Parole ir obligāta tikai jauna ārsta izveidē.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+                        <button type="submit" class="btn btn-primary" id="doctorModalSubmitBtn">Saglabāt ārstu</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/js/admin-theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/assets/js/admin.js"></script>
+</body>
+</html>

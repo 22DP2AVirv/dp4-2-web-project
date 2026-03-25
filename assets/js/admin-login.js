@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw new Error(data.error || "Neizdevas pieslegties admin panelim.");
             }
 
-            window.location.href = "admin-panel.html";
+            window.location.href = "admin-users.html";
         } catch (error) {
             errorMessage.textContent = error.message;
             errorMessage.style.display = "block";
