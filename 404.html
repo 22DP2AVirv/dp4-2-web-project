@@ -3,53 +3,363 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lapa nav atrasta</title>
+    <title>Lapa nav atrasta - 404</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/awesome/css/fontawesome.min.css" rel="stylesheet">
+    <link href="/assets/awesome/css/solid.css" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #f8f9fa;
-            text-align: center;
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
             color: #333;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            margin: 0;
+            overflow: hidden;
+            transition: background 0.3s;
         }
 
-        h1 {
-            font-size: 100px;
-            margin: 0;
-            color: #1F8390;
-        }
-
-        p {
-            font-size: 20px;
-            margin: 10px 0;
-        }
-
-        a {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 18px;
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #fff;
-            background-color: #4EC2CC;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: 0.3s;
         }
 
-        a:hover {
-            background-color: #1F8390;
+        .error-container {
+            text-align: center;
+            z-index: 10;
+            animation: slideUp 0.8s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .error-code {
+            font-size: 120px;
+            font-weight: 900;
+            background: linear-gradient(45deg, #4EC2CC, #1F8390);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+            line-height: 1;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .error-icon {
+            font-size: 80px;
+            color: #4EC2CC;
+            margin-bottom: 20px;
+            animation: rotate 2s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        body.dark-mode .error-icon {
+            color: #58FFFF;
+        }
+
+        .error-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 15px 0;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .error-title {
+            color: #58FFFF;
+        }
+
+        .error-message {
+            font-size: 18px;
+            margin: 15px 0 30px;
+            color: rgba(255, 255, 255, 0.85);
+            max-width: 500px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .btn-home {
+            padding: 12px 35px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(45deg, #4EC2CC, #1F8390);
+            border: none;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(78, 194, 204, 0.3);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-home:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(78, 194, 204, 0.5);
+            color: #fff;
+            text-decoration: none;
+        }
+
+        .btn-contact {
+            padding: 12px 35px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #4EC2CC;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid #4EC2CC;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-contact:hover {
+            background: #4EC2CC;
+            color: #fff;
+            transform: translateY(-3px);
+            text-decoration: none;
+        }
+
+        body.dark-mode .btn-contact {
+            color: #58FFFF;
+            border-color: #58FFFF;
+        }
+
+        body.dark-mode .btn-contact:hover {
+            background: #58FFFF;
+            color: #1a1a2e;
+        }
+
+        .floating-bubbles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+            top: 0;
+            left: 0;
+        }
+
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: rise 4s infinite ease-in;
+        }
+
+        .bubble:nth-child(1) {
+            width: 100px;
+            height: 100px;
+            left: 10%;
+            bottom: -100px;
+            animation-delay: 0s;
+        }
+
+        .bubble:nth-child(2) {
+            width: 80px;
+            height: 80px;
+            left: 20%;
+            bottom: -80px;
+            animation-delay: 0.5s;
+        }
+
+        .bubble:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            left: 50%;
+            bottom: -60px;
+            animation-delay: 1s;
+        }
+
+        .bubble:nth-child(4) {
+            width: 90px;
+            height: 90px;
+            left: 70%;
+            bottom: -90px;
+            animation-delay: 1.5s;
+        }
+
+        .bubble:nth-child(5) {
+            width: 70px;
+            height: 70px;
+            left: 85%;
+            bottom: -70px;
+            animation-delay: 2s;
+        }
+
+        @keyframes rise {
+            to {
+                bottom: 110vh;
+                opacity: 0;
+            }
+        }
+
+        .dark-mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dark-mode-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .error-code {
+                font-size: 80px;
+            }
+
+            .error-title {
+                font-size: 24px;
+            }
+
+            .error-message {
+                font-size: 16px;
+            }
+
+            .error-icon {
+                font-size: 60px;
+            }
+
+            .button-group {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .btn-home, .btn-contact {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>404</h1>
-    <p>Atvainojiet, si lapa nav atrasta.</p>
-    <a href="index.html">Atgriezties uz sakumlapu</a>
+    <div class="floating-bubbles">
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+    </div>
+
+    <button class="dark-mode-toggle" id="toggleDarkMode">
+        <i class="fas fa-moon"></i>
+        <span id="modeText">Tumsas režīms</span>
+    </button>
+
+    <div class="error-container">
+        <div class="error-icon">
+            <i class="fas fa-triangle-exclamation"></i>
+        </div>
+        <h1 class="error-code">404</h1>
+        <h2 class="error-title">Oops! Lapa nav atrasta</h2>
+        <p class="error-message">
+            Atvainojiet, meklētā lapa nav atrasta. Iespējams, ka URL ir nepareizs vai lapa tika pārvietota.
+        </p>
+        <div class="button-group">
+            <a href="index.html" class="btn-home">
+                <i class="fas fa-home"></i>
+                Uz sākumlapu
+            </a>
+            <a href="kontakti.html" class="btn-contact">
+                <i class="fas fa-envelope"></i>
+                Kontakti
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/script.js"></script>
+    <script>
+        const toggleBtn = document.getElementById('toggleDarkMode');
+        const modeText = document.getElementById('modeText');
+        const modeIcon = toggleBtn.querySelector('i');
+        const body = document.body;
+
+        function updateModeDisplay() {
+            if (body.classList.contains('dark-mode')) {
+                modeText.textContent = 'Gaišais režīms';
+                modeIcon.classList.remove('fa-moon');
+                modeIcon.classList.add('fa-sun');
+            } else {
+                modeText.textContent = 'Tumsas režīms';
+                modeIcon.classList.remove('fa-sun');
+                modeIcon.classList.add('fa-moon');
+            }
+        }
+
+        // Pārbaudīt saglabāto režīmu
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            body.classList.add('dark-mode');
+            updateModeDisplay();
+        }
+
+        toggleBtn.addEventListener('click', function() {
+            body.classList.toggle('dark-mode');
+            if (body.classList.contains('dark-mode')) {
+                localStorage.setItem('darkMode', 'enabled');
+            } else {
+                localStorage.setItem('darkMode', 'disabled');
+            }
+            updateModeDisplay();
+        });
+    </script>
 </body>
 </html>
