@@ -18,6 +18,9 @@ header {
     position: absolute;
     right: 0px;
     font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .navbar .menu i.fa-house { 
@@ -99,6 +102,34 @@ body.dark-mode .navbar a:hover {
 body.dark-mode .card {
     background-color: #444;
     color: white;
+}
+
+body.dark-mode .trust-heading h2,
+body.dark-mode .trust-stat-card h3,
+body.dark-mode .trust-highlight-card h3,
+body.dark-mode .trust-stat-value {
+    color: #f5f5f5;
+}
+
+body.dark-mode .trust-heading p,
+body.dark-mode .trust-stat-card p:last-child,
+body.dark-mode .trust-highlight-card p {
+    color: #d2dde2;
+}
+
+body.dark-mode .trust-stat-card,
+body.dark-mode .trust-highlight-card {
+    background-color: #444;
+}
+
+body.dark-mode .trust-stat-card {
+    border-top-color: #58FFFF;
+}
+
+body.dark-mode .trust-badges span {
+    background-color: #3f4d52;
+    border-color: #56666c;
+    color: #f5f5f5;
 }
 
 body.dark-mode .card-content button:hover{
@@ -284,6 +315,104 @@ body.dark-mode .description img{
     
 }
 
+.trust-section {
+    width: 100%;
+    margin: 10px 0 70px;
+}
+
+.trust-heading {
+    max-width: 820px;
+    margin: 0 auto 34px;
+    text-align: center;
+}
+
+.trust-heading h2 {
+    font-size: 2rem;
+    margin-bottom: 14px;
+    color: #174D5D;
+}
+
+.trust-heading p {
+    margin: 0;
+    color: #4c5d64;
+    line-height: 1.8;
+}
+
+.trust-stats-grid,
+.trust-highlights-grid {
+    display: grid;
+    gap: 24px;
+}
+
+.trust-stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 28px;
+}
+
+.trust-highlights-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.trust-stat-card,
+.trust-highlight-card {
+    background-color: #fff;
+    border-radius: 16px;
+    box-shadow: 0px 3px 19px -11px rgba(0,0,0,0.75);
+    padding: 26px 22px;
+}
+
+.trust-stat-card {
+    text-align: center;
+    border-top: 4px solid #194E60;
+}
+
+.trust-stat-value {
+    font-size: 2.6rem;
+    line-height: 1;
+    font-weight: 700;
+    color: #174D5D;
+    margin-bottom: 14px;
+}
+
+.trust-stat-card h3,
+.trust-highlight-card h3 {
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+    color: #174D5D;
+}
+
+.trust-stat-card p:last-child,
+.trust-highlight-card p {
+    margin: 0;
+    color: #4c5d64;
+    line-height: 1.7;
+}
+
+.trust-highlight-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.trust-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.trust-badges span {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background-color: #eef6f8;
+    color: #174D5D;
+    border: 1px solid #d8e8ee;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
 .row {
     display: flex;
     justify-content: space-around; 
@@ -412,6 +541,29 @@ body.dark-mode .description img{
         display: block;
         color: white;
     }
+
+    .trust-stats-grid,
+    .trust-highlights-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .trust-heading h2 {
+        font-size: 1.7rem;
+    }
+
+    .trust-section {
+        margin-bottom: 50px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 991px) {
+    .trust-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .trust-highlights-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .link-footer {
@@ -495,29 +647,51 @@ body.dark-mode .description img{
     margin: 0px 0px 10px 0px;
 }
 
-#registracija {
-    font-size: 18x;
+#registracija,
+#doctorRegistrationButton {
+    font-size: 18px;
     transition: all 30ms;
     transition-duration: 300ms;
-    padding: 8px 12px;
+    padding: 8px 14px;
     border-radius: 10px;
-    background-color: white;
-    color: #194E60;;
-    border: none;
+    border: 1px solid transparent;
     cursor: pointer;
+    box-shadow: 0px 6px 18px -14px rgba(0, 0, 0, 0.55);
 }
 
-#registracija:hover {
-    transform: scale(1.1);
+#registracija {
+    background-color: white;
+    color: #194E60;
+}
+
+#doctorRegistrationButton {
+    background-color: white;
+    color: #194E60;
+}
+
+#registracija:hover,
+#doctorRegistrationButton:hover {
+    transform: translateY(-1px) scale(1.03);
     transition: transform 0.3s;
+}
+
+body.dark-mode #registracija,
+body.dark-mode #doctorRegistrationButton {
+    color: white;
 }
 
 body.dark-mode #registracija {
     background-color: #444;
-    color: white
+    border-color: #555;
 }
 
-body.dark-mode #registracija:hover {
+body.dark-mode #doctorRegistrationButton {
+    background-color: #444;
+    border-color: #555;
+}
+
+body.dark-mode #registracija:hover,
+body.dark-mode #doctorRegistrationButton:hover {
     background-color: #333;
     color: white;
 }
@@ -581,6 +755,71 @@ li {
     border-radius: 10px;
     box-shadow:0px 3px 19px -11px rgba(0,0,0,0.75);
     padding: 20px;
+}
+
+.kontaktiForm .form-control {
+    border-radius: 10px;
+}
+
+body.dark-mode .kontaktiTitle {
+    border-bottom-color: #f2f6f8;
+}
+
+body.dark-mode .kontaktiContainer {
+    background-color: #3d3d3d;
+    color: #f5f5f5;
+}
+
+body.dark-mode .kontaktiContainer h2,
+body.dark-mode .kontaktiContainer p,
+body.dark-mode .kontaktiContainer .form-label,
+body.dark-mode .kontaktiContainer .form-check-label {
+    color: #f5f5f5;
+}
+
+body.dark-mode .kontaktiForm .form-control {
+    background-color: #2c2c2c;
+    border: 1px solid #555;
+    color: #aaa;
+}
+
+body.dark-mode .kontaktiForm .form-control::placeholder {
+    color: #aaa;
+}
+
+body.dark-mode .kontaktiForm .form-control:focus {
+    background-color: #2c2c2c;
+    border-color: #555;
+    color: #aaa;
+    box-shadow: none;
+}
+
+body.dark-mode .kontaktiForm .form-control:disabled,
+body.dark-mode .kontaktiForm .form-control[readonly] {
+    background-color: #2c2c2c;
+    border-color: #555;
+    color: #aaa;
+    -webkit-text-fill-color: #aaa;
+    opacity: 1;
+}
+
+body.dark-mode .kontaktiForm .form-label,
+body.dark-mode .kontaktiForm .form-check-label {
+    color: #aaa;
+}
+
+body.dark-mode .kontaktiForm .form-check-input {
+    background-color: #24292d;
+    border-color: #6d7c84;
+}
+
+body.dark-mode .kontaktiForm .form-check-input:checked {
+    background-color: #58FFFF;
+    border-color: #58FFFF;
+}
+
+body.dark-mode .kontaktiForm a {
+    color: #8aefff;
 }
 
 .work-time-modal {

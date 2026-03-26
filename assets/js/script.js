@@ -658,6 +658,70 @@ function setDarkMode(isDark) {
     localStorage.setItem(DARK_MODE_KEY, isDark ? "enabled" : "disabled");
 }
 
+function animateCountupValue(element) {
+    const target = Number(element.dataset.countupTarget || "0");
+    const suffix = element.dataset.countupSuffix || "";
+
+    if (!Number.isFinite(target)) {
+        element.textContent = `${element.dataset.countupTarget || "0"}${suffix}`;
+        return;
+    }
+
+    const duration = 1200;
+    const start = performance.now();
+
+    const frame = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.round(target * easedProgress);
+        element.textContent = `${currentValue}${suffix}`;
+
+        if (progress < 1) {
+            requestAnimationFrame(frame);
+        }
+    };
+
+    requestAnimationFrame(frame);
+}
+
+function initHomepageCountups() {
+    const countupElements = document.querySelectorAll("[data-countup-target]");
+    if (!countupElements.length) {
+        return;
+    }
+
+    const triggerAnimation = () => {
+        countupElements.forEach((element) => {
+            if (element.dataset.countupDone === "true") {
+                return;
+            }
+
+            element.dataset.countupDone = "true";
+            animateCountupValue(element);
+        });
+    };
+
+    if (!("IntersectionObserver" in window)) {
+        triggerAnimation();
+        return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) {
+                return;
+            }
+
+            triggerAnimation();
+            observer.disconnect();
+        });
+    }, {
+        threshold: 0.35
+    });
+
+    observer.observe(countupElements[0]);
+}
+
 function toggleMenu() {
     const menu = document.querySelector(".navbar .menu");
     if (menu) {
@@ -721,6 +785,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ride: "carousel"
         });
     }
+
+    initHomepageCountups();
 
     document.querySelectorAll("form").forEach((form) => {
         if ([

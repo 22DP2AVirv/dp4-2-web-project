@@ -99,7 +99,7 @@ function compareText(left, right) {
     });
 }
 
-function sortItems(items, { mode, getTextValue, getCreatedAtValue }) {
+function sortItems(items, { mode, getTextValue, getCreatedAtValue, getUpdatedAtValue = getCreatedAtValue }) {
     const sortedItems = [...items];
 
     if (mode === "az") {
@@ -114,6 +114,11 @@ function sortItems(items, { mode, getTextValue, getCreatedAtValue }) {
 
     if (mode === "newest") {
         sortedItems.sort((a, b) => parseTimestamp(getCreatedAtValue(b)) - parseTimestamp(getCreatedAtValue(a)));
+        return sortedItems;
+    }
+
+    if (mode === "updated") {
+        sortedItems.sort((a, b) => parseTimestamp(getUpdatedAtValue(b)) - parseTimestamp(getUpdatedAtValue(a)));
         return sortedItems;
     }
 
@@ -1228,7 +1233,8 @@ async function renderUsers() {
     const users = sortItems(await getUsers(), {
         mode: getSelectedSortValue("userSort", "oldest"),
         getTextValue: (item) => formatFullName(item),
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.password_updated_at || item.updated_at || item.created_at
     });
     if (!users.length) {
         userList.innerHTML = '<tr><td colspan="7">Nav reģistrētu lietotāju.</td></tr>';
@@ -1260,7 +1266,8 @@ async function renderDoctors() {
     const doctors = sortItems(await getDoctors(), {
         mode: getSelectedSortValue("doctorSort", "oldest"),
         getTextValue: (item) => formatFullName(item),
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.password_updated_at || item.updated_at || item.created_at
     });
     if (!doctors.length) {
         doctorList.innerHTML = '<tr><td colspan="8">Nav reģistrētu ārstu.</td></tr>';
@@ -1293,7 +1300,8 @@ async function renderServices() {
     const services = sortItems(await getServices(), {
         mode: getSelectedSortValue("serviceSort", "oldest"),
         getTextValue: (item) => item.service_name,
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.updated_at || item.created_at
     });
     if (!services.length) {
         serviceList.innerHTML = '<tr><td colspan="4">Nav saglabātu pakalpojumu.</td></tr>';
@@ -1322,7 +1330,8 @@ async function renderPrices() {
     const prices = sortItems(await getPrices(), {
         mode: getSelectedSortValue("priceSort", "oldest"),
         getTextValue: (item) => item.title,
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.updated_at || item.created_at
     });
     if (!prices.length) {
         priceList.innerHTML = '<tr><td colspan="7">Nav saglabātu cenu ierakstu.</td></tr>';
@@ -1354,7 +1363,8 @@ async function renderAboutContent() {
     const entries = sortItems(await getAboutContent(), {
         mode: getSelectedSortValue("aboutSort", "oldest"),
         getTextValue: (item) => item.title,
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.updated_at || item.created_at
     });
     if (!entries.length) {
         aboutContentList.innerHTML = '<tr><td colspan="7">Nav saglabātu “Par mums” ierakstu.</td></tr>';
@@ -1385,7 +1395,8 @@ async function renderContactMessages() {
     const messages = sortItems(await getContactMessages(), {
         mode: getSelectedSortValue("messageSort", "newest"),
         getTextValue: (item) => item.name,
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.updated_at || item.created_at
     });
     if (!messages.length) {
         contactMessageList.innerHTML = '<tr><td colspan="7">Nav saņemtu ziņojumu.</td></tr>';
@@ -1416,7 +1427,8 @@ async function renderAppointments() {
     const appointments = sortItems(await getAppointments(), {
         mode: getSelectedSortValue("appointmentSort", "oldest"),
         getTextValue: (item) => formatFullName(item),
-        getCreatedAtValue: (item) => item.created_at
+        getCreatedAtValue: (item) => item.created_at,
+        getUpdatedAtValue: (item) => item.updated_at || item.created_at
     });
     if (!appointments.length) {
         appointmentList.innerHTML = '<tr><td colspan="13">Nav saglabātu pieteikumu.</td></tr>';
