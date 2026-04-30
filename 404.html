@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lapa nav atrasta - 404</title>
+    <title>404 - Lapa nav atrasta</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/fontawesome.min.css" rel="stylesheet">
     <link href="/assets/awesome/css/solid.css" rel="stylesheet">
     <style>
+        :root {
+            --brand-dark: #0b2430;
+            --brand-light: #4db7c5;
+            --brand-soft: #0f3444;
+            --text-main: #e8f3fb;
+            --text-muted: #9fc8d8;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -15,351 +23,148 @@
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             font-family: 'Arial', sans-serif;
-            color: #333;
+            background: radial-gradient(circle at top left, rgba(77, 183, 197, 0.15), transparent 24%),
+                        radial-gradient(circle at bottom right, rgba(11, 36, 48, 0.45), transparent 25%),
+                        linear-gradient(180deg, #07161f 0%, #081b26 100%);
+            color: var(--text-main);
             display: flex;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            transition: background 0.3s;
+            justify-content: center;
+            padding: 32px;
         }
 
-        body.dark-mode {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-        }
-
-        .error-container {
+        .error-panel {
+            width: 100%;
+            max-width: 680px;
+            background: rgba(5, 17, 28, 0.94);
+            border: 1px solid rgba(77, 183, 197, 0.16);
+            box-shadow: 0 28px 80px rgba(1, 10, 20, 0.55);
+            border-radius: 32px;
+            padding: 48px;
             text-align: center;
-            z-index: 10;
-            animation: slideUp 0.8s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .error-code {
-            font-size: 120px;
-            font-weight: 900;
-            background: linear-gradient(45deg, #4EC2CC, #1F8390);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0;
-            line-height: 1;
-            animation: float 3s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0%, 100% {
-                transform: translateY(0px);
-            }
-            50% {
-                transform: translateY(-20px);
-            }
+            backdrop-filter: blur(18px);
         }
 
         .error-icon {
-            font-size: 80px;
-            color: #4EC2CC;
-            margin-bottom: 20px;
-            animation: rotate 2s linear infinite;
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 24px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(11, 36, 48, 0.66), rgba(77, 183, 197, 0.12));
+            color: var(--brand-light);
+            font-size: 40px;
         }
 
-        @keyframes rotate {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        body.dark-mode .error-icon {
-            color: #58FFFF;
+        .error-code {
+            font-size: clamp(88px, 12vw, 120px);
+            font-weight: 900;
+            line-height: 0.92;
+            margin: 0;
+            background: linear-gradient(135deg, var(--brand-light), var(--brand-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .error-title {
-            font-size: 32px;
+            font-size: clamp(24px, 3vw, 34px);
+            margin: 18px 0 12px;
             font-weight: 700;
-            margin: 15px 0;
-            color: #fff;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        body.dark-mode .error-title {
-            color: #58FFFF;
+            color: var(--text-main);
         }
 
         .error-message {
+            max-width: 560px;
+            margin: 0 auto 30px;
             font-size: 18px;
-            margin: 15px 0 30px;
-            color: rgba(255, 255, 255, 0.85);
-            max-width: 500px;
+            line-height: 1.8;
+            color: var(--text-muted);
         }
 
         .button-group {
             display: flex;
-            gap: 15px;
-            justify-content: center;
             flex-wrap: wrap;
-            margin-top: 30px;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .btn-home,
+        .btn-contact {
+            padding: 14px 32px;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
 
         .btn-home {
-            padding: 12px 35px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fff;
-            background: linear-gradient(45deg, #4EC2CC, #1F8390);
-            border: none;
-            border-radius: 50px;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(78, 194, 204, 0.3);
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-home:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(78, 194, 204, 0.5);
-            color: #fff;
-            text-decoration: none;
+            background: linear-gradient(135deg, var(--brand-light), #0b3346);
+            color: white;
+            box-shadow: 0 22px 40px rgba(0, 0, 0, 0.24);
         }
 
         .btn-contact {
-            padding: 12px 35px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #4EC2CC;
-            background: rgba(255, 255, 255, 0.15);
-            border: 2px solid #4EC2CC;
-            border-radius: 50px;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+            background: rgba(77, 183, 197, 0.12);
+            color: var(--brand-light);
+            border-color: rgba(77, 183, 197, 0.18);
+        }
+
+        .btn-home:hover,
+        .btn-contact:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-home:hover {
+            box-shadow: 0 26px 48px rgba(0, 0, 0, 0.28);
         }
 
         .btn-contact:hover {
-            background: #4EC2CC;
-            color: #fff;
-            transform: translateY(-3px);
-            text-decoration: none;
+            background: rgba(77, 183, 197, 0.18);
         }
 
-        body.dark-mode .btn-contact {
-            color: #58FFFF;
-            border-color: #58FFFF;
-        }
-
-        body.dark-mode .btn-contact:hover {
-            background: #58FFFF;
-            color: #1a1a2e;
-        }
-
-        .floating-bubbles {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            z-index: 1;
-            top: 0;
-            left: 0;
-        }
-
-        .bubble {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            animation: rise 4s infinite ease-in;
-        }
-
-        .bubble:nth-child(1) {
-            width: 100px;
-            height: 100px;
-            left: 10%;
-            bottom: -100px;
-            animation-delay: 0s;
-        }
-
-        .bubble:nth-child(2) {
-            width: 80px;
-            height: 80px;
-            left: 20%;
-            bottom: -80px;
-            animation-delay: 0.5s;
-        }
-
-        .bubble:nth-child(3) {
-            width: 60px;
-            height: 60px;
-            left: 50%;
-            bottom: -60px;
-            animation-delay: 1s;
-        }
-
-        .bubble:nth-child(4) {
-            width: 90px;
-            height: 90px;
-            left: 70%;
-            bottom: -90px;
-            animation-delay: 1.5s;
-        }
-
-        .bubble:nth-child(5) {
-            width: 70px;
-            height: 70px;
-            left: 85%;
-            bottom: -70px;
-            animation-delay: 2s;
-        }
-
-        @keyframes rise {
-            to {
-                bottom: 110vh;
-                opacity: 0;
-            }
-        }
-
-        .dark-mode-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            color: #fff;
-            padding: 8px 15px;
-            border-radius: 50px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .dark-mode-toggle:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-
-        @media (max-width: 768px) {
-            .error-code {
-                font-size: 80px;
-            }
-
-            .error-title {
-                font-size: 24px;
-            }
-
-            .error-message {
-                font-size: 16px;
-            }
-
-            .error-icon {
-                font-size: 60px;
+        @media (max-width: 600px) {
+            .error-panel {
+                padding: 32px 24px;
             }
 
             .button-group {
                 flex-direction: column;
-                gap: 10px;
             }
 
-            .btn-home, .btn-contact {
+            .btn-home,
+            .btn-contact {
                 width: 100%;
-                justify-content: center;
             }
         }
     </style>
 </head>
 <body>
-    <div class="floating-bubbles">
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-    </div>
-
-    <button class="dark-mode-toggle" id="toggleDarkMode">
-        <i class="fas fa-moon"></i>
-        <span id="modeText">Tumsas režīms</span>
-    </button>
-
-    <div class="error-container">
-        <div class="error-icon">
-            <i class="fas fa-triangle-exclamation"></i>
-        </div>
+    <main class="error-panel">
         <h1 class="error-code">404</h1>
-        <h2 class="error-title">Oops! Lapa nav atrasta</h2>
+        <h2 class="error-title">Lapa nav atrasta</h2>
         <p class="error-message">
-            Atvainojiet, meklētā lapa nav atrasta. Iespējams, ka URL ir nepareizs vai lapa tika pārvietota.
+            Šķiet, ka šī lapa pašlaik nav pieejama. Atgriezies uz sākumlapu vai sazinies ar mums, ja nepieciešama palīdzība.
         </p>
         <div class="button-group">
             <a href="index.html" class="btn-home">
-                <i class="fas fa-home"></i>
-                Uz sākumlapu
+                <i class="fas fa-home"></i> Sākumlapa
             </a>
             <a href="kontakti.html" class="btn-contact">
-                <i class="fas fa-envelope"></i>
-                Kontakti
+                <i class="fas fa-envelope"></i> Kontakti
             </a>
         </div>
-    </div>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/assets/js/script.js"></script>
-    <script>
-        const toggleBtn = document.getElementById('toggleDarkMode');
-        const modeText = document.getElementById('modeText');
-        const modeIcon = toggleBtn.querySelector('i');
-        const body = document.body;
-
-        function updateModeDisplay() {
-            if (body.classList.contains('dark-mode')) {
-                modeText.textContent = 'Gaišais režīms';
-                modeIcon.classList.remove('fa-moon');
-                modeIcon.classList.add('fa-sun');
-            } else {
-                modeText.textContent = 'Tumsas režīms';
-                modeIcon.classList.remove('fa-sun');
-                modeIcon.classList.add('fa-moon');
-            }
-        }
-
-        // Pārbaudīt saglabāto režīmu
-        if (localStorage.getItem('darkMode') === 'enabled') {
-            body.classList.add('dark-mode');
-            updateModeDisplay();
-        }
-
-        toggleBtn.addEventListener('click', function() {
-            body.classList.toggle('dark-mode');
-            if (body.classList.contains('dark-mode')) {
-                localStorage.setItem('darkMode', 'enabled');
-            } else {
-                localStorage.setItem('darkMode', 'disabled');
-            }
-            updateModeDisplay();
-        });
-    </script>
 </body>
 </html>
