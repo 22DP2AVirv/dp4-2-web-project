@@ -4,6 +4,12 @@ const appointmentLoginRequiredMessage = window.APPOINTMENT_LOGIN_REQUIRED_MESSAG
 const doctorAppointmentRestrictedMessage = window.DOCTOR_APPOINTMENT_RESTRICTED_MESSAGE
     || "Ārsta kontam procedūru pieteikšana nav pieejama.";
 const ALLOWED_TIME_MINUTES = new Set(["00", "15", "30", "45"]);
+const appointmentState = {
+    availableDates: [],
+    availableTimes: [],
+    dateRequestId: 0,
+    availabilityRequestId: 0
+};
 
 function setDoctorSelectPlaceholder(message, disabled = true) {
     const doctorSelect = document.getElementById("arstId");
@@ -24,6 +30,46 @@ function setDoctorSelectPlaceholder(message, disabled = true) {
     doctorSelect.disabled = disabled;
 }
 
+function setDateSelectPlaceholder(message, disabled = true) {
+    const dateSelect = document.getElementById("velamaisDatums");
+    if (!dateSelect) {
+        return;
+    }
+
+    appointmentState.availableDates = [];
+    dateSelect.innerHTML = "";
+
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = message;
+    option.disabled = true;
+    option.selected = true;
+    option.defaultSelected = true;
+
+    dateSelect.appendChild(option);
+    dateSelect.disabled = disabled;
+}
+
+function setTimeSelectPlaceholder(message, disabled = true) {
+    const timeSelect = document.getElementById("velamaisLaiks");
+    if (!timeSelect) {
+        return;
+    }
+
+    appointmentState.availableTimes = [];
+    timeSelect.innerHTML = "";
+
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = message;
+    option.disabled = true;
+    option.selected = true;
+    option.defaultSelected = true;
+
+    timeSelect.appendChild(option);
+    timeSelect.disabled = disabled;
+}
+
 async function populateDoctorOptions(procedura, selectedDoctorId = "") {
     const doctorSelect = document.getElementById("arstId");
     if (!doctorSelect) {
@@ -32,6 +78,8 @@ async function populateDoctorOptions(procedura, selectedDoctorId = "") {
 
     if (!procedura) {
         setDoctorSelectPlaceholder("Vispirms izvēlieties procedūru*");
+        setDateSelectPlaceholder("Vispirms izvēlieties ārstu*");
+        setTimeSelectPlaceholder("Vispirms izvēlieties ārstu*");
         return;
     }
 
@@ -60,6 +108,8 @@ async function populateDoctorOptions(procedura, selectedDoctorId = "") {
 
         if (!Array.isArray(doctors) || !doctors.length) {
             setDoctorSelectPlaceholder("Šai procedūrai ārsti nav pieejami");
+            setDateSelectPlaceholder("Šai procedūrai nav pieejamu datumu");
+            setTimeSelectPlaceholder("Šai procedūrai nav pieejamu laiku");
             return;
         }
 
@@ -86,9 +136,108 @@ async function populateDoctorOptions(procedura, selectedDoctorId = "") {
 
             doctorSelect.appendChild(option);
         });
+
+        if (selectedDoctorId) {
+            await populateDateOptions(selectedDoctorId, procedura);
+        }
     } catch (error) {
         console.error("Neizdevās ielādēt ārstus:", error);
         setDoctorSelectPlaceholder("Neizdevās ielādēt ārstus");
+        setDateSelectPlaceholder("Neizdevās ielādēt datumus");
+        setTimeSelectPlaceholder("Neizdevās ielādēt laikus");
+    }
+}
+
+async function populateDateOptions(doctorId, procedureValue, selectedDate = "") {
+    const dateSelect = document.getElementById("velamaisDatums");
+    if (!dateSelect) {
+        return;
+    }
+
+    if (!doctorId) {
+        setDateSelectPlaceholder("Vispirms izvēlieties ārstu*");
+        setTimeSelectPlaceholder("Vispirms izvēlieties datumu*");
+        return;
+    }
+
+    setDateSelectPlaceholder("Ielādējam datumus...");
+    const requestId = ++appointmentState.dateRequestId;
+
+    try {
+        const response = await fetch(
+            `/api/doctors/${encodeURIComponent(doctorId)}/available-dates?procedura=${encodeURIComponent(procedureValue)}`
+        );
+
+        if (response.status === 401) {
+            alert(appointmentLoginRequiredMessage);
+            window.location.href = "login.html";
+            return;
+        }
+
+        if (response.status === 403) {
+            const data = await response.json();
+            alert((data && data.error) || doctorAppointmentRestrictedMessage);
+            window.location.href = "user_cab.html";
+            return;
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error((data && data.error) || "Neizdevās ielādēt pieejamos datumus.");
+        }
+
+        if (requestId !== appointmentState.dateRequestId) {
+            return;
+        }
+
+        const availableDates = Array.isArray(data.available_dates) ? data.available_dates : [];
+        appointmentState.availableDates = availableDates;
+        dateSelect.innerHTML = "";
+
+        const placeholderOption = document.createElement("option");
+        placeholderOption.value = "";
+        placeholderOption.disabled = true;
+        placeholderOption.selected = true;
+        placeholderOption.defaultSelected = true;
+
+        if (!availableDates.length) {
+            placeholderOption.textContent = "Ārstam šobrīd nav brīvu datumu";
+            dateSelect.disabled = true;
+            dateSelect.appendChild(placeholderOption);
+            setTimeSelectPlaceholder("Ārstam nav pieejamu laiku");
+            return;
+        }
+
+        placeholderOption.textContent = "Izvēlieties datumu*";
+        dateSelect.disabled = false;
+        dateSelect.appendChild(placeholderOption);
+
+        availableDates.forEach((entry) => {
+            const option = document.createElement("option");
+            option.value = entry.date;
+            option.textContent = formatDateLabel(entry.date, entry.open_slots);
+
+            if (entry.date === selectedDate) {
+                option.selected = true;
+                placeholderOption.selected = false;
+            }
+
+            dateSelect.appendChild(option);
+        });
+
+        if (selectedDate) {
+            await refreshAvailableTimeOptions();
+        } else {
+            setTimeSelectPlaceholder("Vispirms izvēlieties datumu*");
+        }
+    } catch (error) {
+        console.error("Neizdevās ielādēt datumus:", error);
+        if (requestId !== appointmentState.dateRequestId) {
+            return;
+        }
+
+        setDateSelectPlaceholder("Neizdevās ielādēt datumus");
+        setTimeSelectPlaceholder("Neizdevās ielādēt laikus");
     }
 }
 
@@ -101,6 +250,25 @@ function formatDateForInput(date) {
 
 function formatTimeValue(hour, minute) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function formatDateLabel(dateValue, openSlots = 0) {
+    const parsedDate = parseDateInputValue(dateValue);
+    if (!parsedDate) {
+        return dateValue;
+    }
+
+    const baseLabel = new Intl.DateTimeFormat("lv-LV", {
+        weekday: "short",
+        day: "2-digit",
+        month: "long"
+    }).format(parsedDate);
+
+    if (!openSlots) {
+        return baseLabel;
+    }
+
+    return `${baseLabel} (${openSlots} brīvi laiki)`;
 }
 
 function getMaxAppointmentDate(baseDate = new Date()) {
@@ -189,6 +357,13 @@ function validateAppointmentDate(dateValue) {
         return workingHours.closedMessage;
     }
 
+    if (
+        appointmentState.availableDates.length
+        && !appointmentState.availableDates.some((entry) => entry.date === dateValue)
+    ) {
+        return "Lūdzu izvēlieties datumu no ārsta pieejamā saraksta.";
+    }
+
     return null;
 }
 
@@ -223,68 +398,118 @@ function validateAppointmentTime(dateValue, timeValue) {
         return workingHours.closedMessage;
     }
 
+    if (!appointmentState.availableTimes.includes(timeValue)) {
+        return "Šis laiks vairs nav pieejams. Lūdzu izvēlieties citu laiku.";
+    }
+
     return null;
 }
 
-function populateTimeOptions(dateValue, selectedValue = "") {
+async function populateTimeOptions(dateValue, doctorId, procedureValue, selectedValue = "") {
     const timeSelect = document.getElementById("velamaisLaiks");
     if (!timeSelect) {
         return;
     }
 
-    timeSelect.innerHTML = "";
-
-    const placeholderOption = document.createElement("option");
-    placeholderOption.value = "";
-    placeholderOption.disabled = true;
-    placeholderOption.selected = true;
-    placeholderOption.defaultSelected = true;
-
-    const workingHours = getWorkingHoursForDate(dateValue);
     if (!dateValue) {
-        placeholderOption.textContent = "Vispirms izvēlieties datumu*";
-        timeSelect.disabled = true;
-        timeSelect.appendChild(placeholderOption);
+        setTimeSelectPlaceholder("Vispirms izvēlieties datumu*");
         return;
     }
 
-    if (!workingHours) {
-        placeholderOption.textContent = "Izvēlieties korektu datumu*";
-        timeSelect.disabled = true;
-        timeSelect.appendChild(placeholderOption);
+    if (!doctorId) {
+        setTimeSelectPlaceholder("Vispirms izvēlieties ārstu*");
         return;
     }
 
-    if (workingHours.openingHour === null) {
-        placeholderOption.textContent = "Svētdienā nestrādājam";
-        timeSelect.disabled = true;
-        timeSelect.appendChild(placeholderOption);
+    const dateError = validateAppointmentDate(dateValue);
+    if (dateError) {
+        setTimeSelectPlaceholder(dateError);
         return;
     }
 
-    placeholderOption.textContent = "Izvēlieties laiku*";
-    timeSelect.disabled = false;
-    timeSelect.appendChild(placeholderOption);
+    setTimeSelectPlaceholder("Ielādējam laikus...");
+    const requestId = ++appointmentState.availabilityRequestId;
 
-    const openingMinutes = workingHours.openingHour * 60;
-    const closingMinutes = workingHours.closingHour * 60;
-
-    for (let totalMinutes = openingMinutes; totalMinutes <= closingMinutes; totalMinutes += 15) {
-        const optionValue = formatTimeValue(
-            Math.floor(totalMinutes / 60),
-            totalMinutes % 60
+    try {
+        const response = await fetch(
+            `/api/doctors/${encodeURIComponent(doctorId)}/available-slots?procedura=${encodeURIComponent(procedureValue)}&date=${encodeURIComponent(dateValue)}`
         );
-        const option = document.createElement("option");
-        option.value = optionValue;
-        option.textContent = optionValue;
 
-        if (optionValue === selectedValue) {
-            option.selected = true;
-            placeholderOption.selected = false;
+        if (response.status === 401) {
+            alert(appointmentLoginRequiredMessage);
+            window.location.href = "login.html";
+            return;
         }
 
-        timeSelect.appendChild(option);
+        if (response.status === 403) {
+            const data = await response.json();
+            alert((data && data.error) || doctorAppointmentRestrictedMessage);
+            window.location.href = "user_cab.html";
+            return;
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error((data && data.error) || "Neizdevās ielādēt ārsta pieejamos laikus.");
+        }
+
+        if (requestId !== appointmentState.availabilityRequestId) {
+            return;
+        }
+
+        const availableTimes = Array.isArray(data.available_times) ? data.available_times : [];
+        appointmentState.availableTimes = availableTimes;
+        timeSelect.innerHTML = "";
+
+        const placeholderOption = document.createElement("option");
+        placeholderOption.value = "";
+        placeholderOption.disabled = true;
+        placeholderOption.selected = true;
+        placeholderOption.defaultSelected = true;
+
+        if (!availableTimes.length) {
+            placeholderOption.textContent = "Ārsts šajā dienā nav pieejams";
+            timeSelect.disabled = true;
+            timeSelect.appendChild(placeholderOption);
+            return;
+        }
+
+        placeholderOption.textContent = "Izvēlieties laiku*";
+        timeSelect.disabled = false;
+        timeSelect.appendChild(placeholderOption);
+
+        availableTimes.forEach((optionValue) => {
+            const option = document.createElement("option");
+            option.value = optionValue;
+            option.textContent = optionValue;
+
+            if (optionValue === selectedValue) {
+                option.selected = true;
+                placeholderOption.selected = false;
+            }
+
+            timeSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Neizdevās ielādēt pieejamos laikus:", error);
+        if (requestId !== appointmentState.availabilityRequestId) {
+            return;
+        }
+        setTimeSelectPlaceholder("Neizdevās ielādēt laikus");
     }
+}
+
+async function refreshAvailableTimeOptions(selectedValue = "") {
+    const dateInput = document.getElementById("velamaisDatums");
+    const doctorSelect = document.getElementById("arstId");
+    const procedureInput = document.getElementById("procedura");
+
+    await populateTimeOptions(
+        dateInput ? dateInput.value : "",
+        doctorSelect ? doctorSelect.value : "",
+        procedureInput ? procedureInput.value : "",
+        selectedValue
+    );
 }
 
 async function prefillCurrentUser() {
@@ -424,7 +649,8 @@ async function submitAppointment(event) {
         document.getElementById("adreseInput").style.display = "none";
         document.getElementById("filialeInput").style.display = "none";
         setDoctorSelectPlaceholder("Vispirms izvēlieties procedūru*");
-        populateTimeOptions("");
+        setDateSelectPlaceholder("Vispirms izvēlieties ārstu*");
+        setTimeSelectPlaceholder("Vispirms izvēlieties ārstu*");
         await prefillCurrentUser();
     } catch (error) {
         alert(error.message);
@@ -434,28 +660,45 @@ async function submitAppointment(event) {
 document.addEventListener("DOMContentLoaded", () => {
     const dateInput = document.getElementById("velamaisDatums");
     const procedureInput = document.getElementById("procedura");
+    const doctorSelect = document.getElementById("arstId");
     if (dateInput) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateInput.min = formatDateForInput(today);
-        dateInput.max = formatDateForInput(getMaxAppointmentDate(today));
-        dateInput.addEventListener("change", (event) => {
-            populateTimeOptions(event.target.value);
+        dateInput.addEventListener("change", () => {
+            refreshAvailableTimeOptions().catch((error) => {
+                console.error("Neizdevās atjaunot laikus:", error);
+            });
         });
     }
 
     if (procedureInput) {
         procedureInput.addEventListener("change", (event) => {
-            populateDoctorOptions(event.target.value);
+            populateDoctorOptions(event.target.value).catch((error) => {
+                console.error("Neizdevās ielādēt ārstus:", error);
+            });
+            setDateSelectPlaceholder("Vispirms izvēlieties ārstu*");
+            setTimeSelectPlaceholder("Vispirms izvēlieties ārstu*");
+        });
+    }
+
+    if (doctorSelect) {
+        doctorSelect.addEventListener("change", () => {
+            populateDateOptions(
+                doctorSelect.value,
+                procedureInput ? procedureInput.value : ""
+            ).catch((error) => {
+                console.error("Neizdevās ielādēt datumus:", error);
+            });
         });
     }
 
     if (procedureInput && procedureInput.value) {
-        populateDoctorOptions(procedureInput.value);
+        populateDoctorOptions(procedureInput.value).catch((error) => {
+            console.error("Neizdevās ielādēt ārstus:", error);
+        });
     } else {
         setDoctorSelectPlaceholder("Vispirms izvēlieties procedūru*");
     }
-    populateTimeOptions("");
+    setDateSelectPlaceholder("Vispirms izvēlieties ārstu*");
+    setTimeSelectPlaceholder("Vispirms izvēlieties ārstu*");
     prefillCurrentUser();
 });
 

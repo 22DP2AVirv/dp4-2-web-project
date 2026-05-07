@@ -14,6 +14,18 @@ const PROCEDURE_ALIASES = {
     vakcinācija: "vakcinacija"
 };
 
+const DOCTOR_STATUS_LABELS = {
+    pending: "Gaida apstiprinājumu",
+    approved: "Apstiprināts",
+    cancelled: "Atcelts"
+};
+
+const DOCTOR_STATUS_BADGE_CLASSES = {
+    pending: "is-pending",
+    approved: "is-approved",
+    cancelled: "is-cancelled"
+};
+
 function escapeHtml(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -33,6 +45,15 @@ function normalizeText(value) {
 
 function formatProcedure(value) {
     return PROCEDURE_LABELS[value] || value || "-";
+}
+
+function formatDoctorStatus(value) {
+    return DOCTOR_STATUS_LABELS[value] || value || "-";
+}
+
+function renderDoctorStatusBadge(value) {
+    const badgeClass = DOCTOR_STATUS_BADGE_CLASSES[value] || "is-pending";
+    return `<span class="admin-status-badge ${badgeClass}">${escapeHtml(formatDoctorStatus(value))}</span>`;
 }
 
 function parseProcedureValue(value) {
@@ -343,6 +364,7 @@ function getDoctorModalElements() {
         emailInput: document.getElementById("doctorModalEmail"),
         phoneInput: document.getElementById("doctorModalPhone"),
         procedureInput: document.getElementById("doctorModalProcedure"),
+        statusInput: document.getElementById("doctorModalStatus"),
         passwordInput: document.getElementById("doctorModalPassword"),
         passwordLabel: document.getElementById("doctorModalPasswordLabel"),
         passwordHint: document.getElementById("doctorModalPasswordHint")
@@ -366,6 +388,7 @@ function resetDoctorModal() {
     elements.subtitle.textContent = "Aizpildi ārsta datus un saglabā izmaiņas.";
     elements.submitButton.textContent = "Saglabāt ārstu";
     elements.submitButton.disabled = false;
+    elements.statusInput.value = "approved";
     elements.passwordLabel.textContent = "Parole";
     elements.passwordHint.textContent = "Parole ir obligāta tikai jauna ārsta izveidē.";
     elements.passwordInput.required = true;
@@ -392,6 +415,7 @@ async function handleDoctorModalSubmit(event) {
         email: elements.emailInput.value.trim().toLowerCase(),
         phone: elements.phoneInput.value.trim(),
         procedure: elements.procedureInput.value,
+        approval_status: elements.statusInput.value,
         password: elements.passwordInput.value.trim()
     };
 
@@ -464,6 +488,7 @@ function openDoctorModal(mode, doctor = null) {
         elements.emailInput.value = doctor.email || "";
         elements.phoneInput.value = doctor.phone || "";
         elements.procedureInput.value = doctor.procedure || "";
+        elements.statusInput.value = doctor.approval_status || "pending";
     }
 
     doctorModalState.instance.show();
@@ -809,7 +834,7 @@ function populateAppointmentDoctors(procedure, selectedDoctorId = "") {
     }
 
     const doctors = appointmentModalState.doctors
-        .filter((doctor) => doctor.procedure === procedure)
+        .filter((doctor) => doctor.procedure === procedure && doctor.approval_status === "approved")
         .sort((left, right) => compareText(formatFullName(left), formatFullName(right)));
 
     elements.doctorInput.innerHTML = '<option value="">Bez piešķirta ārsta</option>';
@@ -1257,6 +1282,35 @@ async function renderUsers() {
     `).join("");
 }
 
+function getDoctorStatusActions(doctor) {
+    const actions = [];
+
+    if (doctor.approval_status !== "approved") {
+        actions.push(`
+            <button class="btn btn-success btn-sm" onclick="updateDoctorStatus(${doctor.id}, 'approved')">
+                Apstiprināt
+            </button>
+        `);
+    }
+
+    if (doctor.approval_status !== "cancelled") {
+        actions.push(`
+            <button class="btn btn-warning btn-sm" onclick="updateDoctorStatus(${doctor.id}, 'cancelled')">
+                Atcelt
+            </button>
+        `);
+    }
+
+    actions.push(`
+        <button class="btn btn-secondary btn-sm" onclick="editDoctor(${doctor.id})">Rediģēt</button>
+    `);
+    actions.push(`
+        <button class="btn btn-danger btn-sm" onclick="deleteDoctor(${doctor.id})">Dzēst</button>
+    `);
+
+    return actions.join("");
+}
+
 async function renderDoctors() {
     const doctorList = document.getElementById("doctorList");
     if (!doctorList) {
@@ -1267,10 +1321,10 @@ async function renderDoctors() {
         mode: getSelectedSortValue("doctorSort", "oldest"),
         getTextValue: (item) => formatFullName(item),
         getCreatedAtValue: (item) => item.created_at,
-        getUpdatedAtValue: (item) => item.password_updated_at || item.updated_at || item.created_at
+        getUpdatedAtValue: (item) => item.status_updated_at || item.password_updated_at || item.updated_at || item.created_at
     });
     if (!doctors.length) {
-        doctorList.innerHTML = '<tr><td colspan="8">Nav reģistrētu ārstu.</td></tr>';
+        doctorList.innerHTML = '<tr><td colspan="9">Nav reģistrētu ārstu.</td></tr>';
         return;
     }
 
@@ -1281,11 +1335,11 @@ async function renderDoctors() {
             <td>${escapeHtml(doctor.email || "-")}</td>
             <td>${escapeHtml(doctor.phone || "-")}</td>
             <td>${escapeHtml(formatProcedure(doctor.procedure))}</td>
+            <td>${renderDoctorStatusBadge(doctor.approval_status)}</td>
             <td>${escapeHtml(formatDate(doctor.created_at))}</td>
-            <td>${escapeHtml(formatDate(doctor.password_updated_at))}</td>
-            <td>
-                <button class="btn btn-secondary btn-sm" onclick="editDoctor(${doctor.id})">Rediģēt</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteDoctor(${doctor.id})">Dzēst</button>
+            <td>${escapeHtml(formatDate(doctor.status_updated_at || doctor.created_at))}</td>
+            <td class="admin-actions-cell">
+                ${getDoctorStatusActions(doctor)}
             </td>
         </tr>
     `).join("");
@@ -1583,6 +1637,25 @@ window.deleteDoctor = async function deleteDoctor(doctorId) {
 
     try {
         await apiRequest(`/api/admin/doctors/${doctorId}`, { method: "DELETE" });
+        await renderDoctors();
+    } catch (error) {
+        handleAdminError(error);
+    }
+};
+
+window.updateDoctorStatus = async function updateDoctorStatus(doctorId, approvalStatus) {
+    const statusLabel = formatDoctorStatus(approvalStatus).toLowerCase();
+    if (!confirm(`Vai tiešām nomainīt ārsta statusu uz "${statusLabel}"?`)) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/api/admin/doctors/${doctorId}/status`, {
+            method: "PUT",
+            body: JSON.stringify({
+                approval_status: approvalStatus
+            })
+        });
         await renderDoctors();
     } catch (error) {
         handleAdminError(error);

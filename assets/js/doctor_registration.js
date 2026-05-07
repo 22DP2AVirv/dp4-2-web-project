@@ -37,7 +37,7 @@ async function submitDoctorRegistration(event) {
             throw new Error(data.error || "Neizdevās reģistrēt ārsta kontu.");
         }
 
-        alert("Ārsta reģistrācija pabeigta. Tagad vari pieslēgties.");
+        alert("Ārsta reģistrācija ir iesniegta. Kad administrators apstiprinās profilu, tad varēsi pieslēgties.");
         window.location.href = "login.html?role=doctor";
     } catch (error) {
         alert(error.message);

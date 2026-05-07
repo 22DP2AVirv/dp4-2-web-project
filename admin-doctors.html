@@ -37,7 +37,7 @@
                 <div>
                     <span class="admin-page-tag">Medicīnas personāls</span>
                     <h1>Ārsti</h1>
-                    <p>Šeit vari pārvaldīt visus ārstu kontus, viņu kontaktinformāciju un piesaistītās procedūras.</p>
+                    <p>Šeit vari pārvaldīt visus ārstu kontus, viņu kontaktinformāciju, piesaistītās procedūras un apstiprināšanas statusus.</p>
                 </div>
             </header>
 
@@ -45,7 +45,7 @@
                 <div class="admin-card-header">
                     <div class="admin-card-title">
                         <h2>Ārstu saraksts</h2>
-                        <p>Ārstu konti ar piesaistītajām procedūrām, kurus vari rediģēt, papildināt vai dzēst.</p>
+                        <p>Ārstu konti ar piesaistītajām procedūrām un statusiem, kurus vari apstiprināt, rediģēt vai atcelt.</p>
                     </div>
                     <div class="admin-actions">
                         <label class="admin-sorter" for="doctorSort">
@@ -71,8 +71,9 @@
                                 <th>E-pasts</th>
                                 <th>Tālrunis</th>
                                 <th>Procedūra</th>
+                                <th>Statuss</th>
                                 <th>Reģistrācijas datums</th>
-                                <th>Izmaiņu datums</th>
+                                <th>Statusa maiņa</th>
                                 <th>Darbības</th>
                             </tr>
                         </thead>
@@ -125,6 +126,14 @@
                                     <option value="vakcinacija">Vakcinācija</option>
                                 </select>
                                 <div class="invalid-feedback">Lūdzu izvēlies procedūru.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="doctorModalStatus" class="form-label">Statuss</label>
+                                <select id="doctorModalStatus" class="form-select" required>
+                                    <option value="approved">Apstiprināts</option>
+                                    <option value="pending">Gaida apstiprinājumu</option>
+                                    <option value="cancelled">Atcelts</option>
+                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label for="doctorModalPassword" class="form-label" id="doctorModalPasswordLabel">Parole</label>

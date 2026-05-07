@@ -171,6 +171,7 @@ function setCabinetRolePresentation(user) {
     const appointmentsPanel = document.getElementById("appointmentsPanel");
     const appointmentsNavButton = document.getElementById("appointmentsNavButton");
     const procedureGroup = document.getElementById("profileProcedureGroup");
+    const scheduleButton = document.getElementById("scheduleButton");
     const appointmentCountLabel = document.getElementById("summaryAppointmentCountLabel");
     const appointmentsPanelTitle = document.getElementById("appointmentsPanelTitle");
     const appointmentsPanelIntro = document.getElementById("appointmentsPanelIntro");
@@ -196,6 +197,10 @@ function setCabinetRolePresentation(user) {
 
     if (procedureGroup) {
         procedureGroup.hidden = user.role !== "doctor";
+    }
+
+    if (scheduleButton) {
+        scheduleButton.hidden = user.role !== "doctor";
     }
 
     if (appointmentCountLabel) {
@@ -599,6 +604,13 @@ async function initializeCabinet() {
 
 document.addEventListener("DOMContentLoaded", () => {
     setupSettingsNavigation();
+
+    const scheduleButton = document.getElementById("scheduleButton");
+    if (scheduleButton) {
+        scheduleButton.addEventListener("click", () => {
+            window.location.href = "doctor-schedule.html";
+        });
+    }
 
     const logoutButton = document.getElementById("logoutButton");
     if (logoutButton) {

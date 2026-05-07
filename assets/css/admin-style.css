@@ -250,6 +250,44 @@ a {
     background-color: var(--admin-bg-accent);
 }
 
+.admin-actions-cell {
+    min-width: 260px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.admin-status-badge.is-pending {
+    background-color: #fff3d8;
+    color: #9b6500;
+    border-color: #f4d38a;
+}
+
+.admin-status-badge.is-approved {
+    background-color: #ddf6e8;
+    color: #1b7a43;
+    border-color: #9fd8b6;
+}
+
+.admin-status-badge.is-cancelled {
+    background-color: #fde3e3;
+    color: #b23535;
+    border-color: #efb0b0;
+}
+
 .admin-note {
     margin-top: 16px;
     color: var(--admin-muted);
@@ -480,6 +518,24 @@ body.admin-dark-mode .admin-table tbody tr {
 
 body.admin-dark-mode .admin-table tbody tr:hover {
     background-color: #162229;
+}
+
+body.admin-dark-mode .admin-status-badge.is-pending {
+    background-color: rgba(245, 183, 66, 0.14);
+    color: #ffd88a;
+    border-color: rgba(245, 183, 66, 0.28);
+}
+
+body.admin-dark-mode .admin-status-badge.is-approved {
+    background-color: rgba(72, 199, 116, 0.14);
+    color: #98f2bb;
+    border-color: rgba(72, 199, 116, 0.28);
+}
+
+body.admin-dark-mode .admin-status-badge.is-cancelled {
+    background-color: rgba(233, 99, 99, 0.16);
+    color: #ffb4b4;
+    border-color: rgba(233, 99, 99, 0.28);
 }
 
 body.admin-dark-mode .admin-main .btn-primary,

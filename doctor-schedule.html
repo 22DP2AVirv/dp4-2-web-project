@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ārsta grafiks</title>
+    <link href="/assets/css/styles.css" rel="stylesheet">
+    <link href="/assets/awesome/css/fontawesome.min.css" rel="stylesheet">
+    <link href="/assets/awesome/css/solid.css" rel="stylesheet">
+    <style>
+        .schedule-page {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top left, rgba(88, 255, 255, 0.18), transparent 34%),
+                linear-gradient(180deg, #f2f8fb 0%, #e8f2f6 100%);
+            color: #163d4a;
+        }
+
+        .schedule-header {
+            padding: 24px 0 10px;
+        }
+
+        .schedule-topbar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            align-items: center;
+            gap: 16px;
+        }
+
+        .schedule-topbar-spacer {
+            min-height: 1px;
+        }
+
+        .schedule-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 18px;
+            justify-self: center;
+            color: inherit;
+            text-decoration: none;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            font-size: clamp(1.45rem, 2vw, 1.9rem);
+        }
+
+        .schedule-logo img {
+            width: 72px;
+            height: 72px;
+            border-radius: 22px;
+            object-fit: cover;
+            box-shadow: 0 18px 34px rgba(25, 78, 96, 0.18);
+        }
+
+        .schedule-topbar-actions {
+            justify-self: end;
+        }
+
+        #dark-mode-btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(236, 246, 250, 0.96));
+            color: #194e60;
+            font-weight: 800;
+            font-size: 0.98rem;
+            box-shadow: 0 18px 32px rgba(20, 57, 69, 0.14);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+
+        #dark-mode-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 22px 36px rgba(20, 57, 69, 0.18);
+        }
+
+        .schedule-shell {
+            padding: 20px 0 64px;
+        }
+
+        .schedule-card {
+            padding: 32px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(25, 78, 96, 0.1);
+            box-shadow: 0 28px 60px rgba(15, 47, 58, 0.12);
+            backdrop-filter: blur(12px);
+        }
+
+        .schedule-hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .schedule-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background-color: rgba(25, 78, 96, 0.1);
+            color: #194e60;
+            font-size: 0.86rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .schedule-title {
+            margin: 0 0 12px;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.05;
+        }
+
+        .schedule-subtitle {
+            max-width: 760px;
+            margin: 0;
+            color: #4d6873;
+            line-height: 1.7;
+            font-size: 1rem;
+        }
+
+        .schedule-hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .schedule-action,
+        .schedule-secondary-action,
+        .schedule-month-button,
+        .schedule-slot,
+        .schedule-save {
+            border: none;
+            border-radius: 16px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .schedule-action,
+        .schedule-save {
+            padding: 12px 18px;
+            background: linear-gradient(135deg, #194e60, #2f7f93);
+            color: #fff;
+            font-weight: 800;
+            box-shadow: 0 16px 30px rgba(25, 78, 96, 0.22);
+        }
+
+        .schedule-secondary-action,
+        .schedule-month-button {
+            padding: 12px 18px;
+            background: #f3f8fa;
+            color: #194e60;
+            font-weight: 800;
+            border: 1px solid rgba(25, 78, 96, 0.12);
+        }
+
+        .schedule-action:hover,
+        .schedule-secondary-action:hover,
+        .schedule-month-button:hover,
+        .schedule-slot:hover,
+        .schedule-save:hover {
+            transform: translateY(-1px);
+        }
+
+        .schedule-message,
+        .planner-message {
+            display: none;
+            margin-bottom: 18px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            font-weight: 700;
+        }
+
+        .schedule-message.visible,
+        .planner-message.visible {
+            display: block;
+        }
+
+        .schedule-message.success,
+        .planner-message.success {
+            background-color: rgba(52, 168, 83, 0.12);
+            color: #1d6f36;
+        }
+
+        .schedule-message.error,
+        .planner-message.error {
+            background-color: rgba(217, 48, 37, 0.12);
+            color: #a1261b;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
+            gap: 24px;
+        }
+
+        .schedule-panel {
+            border-radius: 24px;
+            border: 1px solid rgba(25, 78, 96, 0.1);
+            background: linear-gradient(180deg, rgba(248, 252, 253, 0.96), rgba(238, 247, 250, 0.96));
+            padding: 22px;
+        }
+
+        .calendar-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .calendar-title {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .calendar-subtitle,
+        .planner-subtitle,
+        .legend-note,
+        .planner-note {
+            color: #5a7580;
+            line-height: 1.6;
+        }
+
+        .calendar-subtitle {
+            margin: 8px 0 0;
+        }
+
+        .calendar-weekdays,
+        .calendar-grid-days {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .calendar-weekdays {
+            margin-bottom: 12px;
+        }
+
+        .calendar-weekday {
+            padding: 10px 0;
+            text-align: center;
+            border-radius: 14px;
+            background-color: rgba(25, 78, 96, 0.08);
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            font-size: 0.82rem;
+            color: #194e60;
+        }
+
+        .calendar-day {
+            min-height: 124px;
+            padding: 14px 12px;
+            text-align: left;
+            background-color: #fff;
+            border: 1px solid rgba(25, 78, 96, 0.12);
+            box-shadow: 0 12px 24px rgba(20, 57, 69, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .calendar-day.is-selected {
+            border-color: #194e60;
+            box-shadow: 0 20px 34px rgba(25, 78, 96, 0.18);
+        }
+
+        .calendar-day.is-outside {
+            background-color: rgba(255, 255, 255, 0.55);
+            color: #97adb5;
+            box-shadow: none;
+            cursor: default;
+        }
+
+        .calendar-day.is-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .calendar-day.is-closed {
+            background: linear-gradient(180deg, #f7f4f4, #f0e9e9);
+        }
+
+        .calendar-day-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background-color: rgba(25, 78, 96, 0.08);
+            font-weight: 900;
+            font-size: 1rem;
+        }
+
+        .calendar-day.is-selected .calendar-day-number {
+            background-color: #194e60;
+            color: #fff;
+        }
+
+        .calendar-day-note {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.82rem;
+            color: #56717b;
+        }
+
+        .calendar-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 800;
+            width: fit-content;
+        }
+
+        .calendar-count.open {
+            background-color: rgba(52, 168, 83, 0.12);
+            color: #1d6f36;
+        }
+
+        .calendar-count.booked {
+            background-color: rgba(25, 78, 96, 0.12);
+            color: #194e60;
+        }
+
+        .calendar-count.empty {
+            background-color: rgba(25, 78, 96, 0.08);
+            color: #607b86;
+        }
+
+        .calendar-count.closed {
+            background-color: rgba(161, 38, 27, 0.1);
+            color: #a1261b;
+        }
+
+        .calendar-legend {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .legend-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background-color: rgba(25, 78, 96, 0.08);
+            color: #194e60;
+            font-weight: 700;
+            font-size: 0.86rem;
+        }
+
+        .legend-pill::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+
+        .legend-pill.open {
+            color: #1d6f36;
+        }
+
+        .legend-pill.booked {
+            color: #194e60;
+        }
+
+        .legend-pill.closed {
+            color: #a1261b;
+        }
+
+        .planner-header {
+            margin-bottom: 18px;
+        }
+
+        .planner-title {
+            margin: 0 0 6px;
+            font-size: 1.5rem;
+        }
+
+        .planner-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .planner-stat {
+            padding: 14px;
+            border-radius: 18px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(25, 78, 96, 0.1);
+        }
+
+        .planner-stat span {
+            display: block;
+            margin-bottom: 4px;
+            color: #5a7580;
+            font-size: 0.86rem;
+        }
+
+        .planner-stat strong {
+            font-size: 1.2rem;
+        }
+
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .schedule-slot {
+            padding: 12px 10px;
+            background-color: rgba(255, 255, 255, 0.92);
+            color: #194e60;
+            font-weight: 800;
+            border: 1px solid rgba(25, 78, 96, 0.1);
+            box-shadow: 0 12px 20px rgba(20, 57, 69, 0.06);
+        }
+
+        .schedule-slot.is-active {
+            background: linear-gradient(135deg, #194e60, #27798b);
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .schedule-slot.is-booked {
+            background: linear-gradient(135deg, rgba(25, 78, 96, 0.16), rgba(25, 78, 96, 0.08));
+            color: #194e60;
+            border-color: rgba(25, 78, 96, 0.2);
+            cursor: not-allowed;
+        }
+
+        .schedule-slot.is-booked::after {
+            content: "Pieraksts";
+            display: block;
+            margin-top: 5px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .schedule-slot.is-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .planner-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .planner-empty {
+            padding: 26px 18px;
+            border-radius: 20px;
+            background-color: rgba(255, 255, 255, 0.72);
+            border: 1px dashed rgba(25, 78, 96, 0.16);
+            color: #56717b;
+            line-height: 1.7;
+        }
+
+        body.dark-mode.schedule-page {
+            background:
+                radial-gradient(circle at top left, rgba(88, 255, 255, 0.12), transparent 32%),
+                linear-gradient(180deg, #091116 0%, #0f181d 100%);
+            color: #edf7fa;
+        }
+
+        body.dark-mode .schedule-card,
+        body.dark-mode .schedule-panel,
+        body.dark-mode .calendar-day,
+        body.dark-mode .planner-stat,
+        body.dark-mode .planner-empty {
+            background: rgba(21, 31, 36, 0.92);
+            color: #edf7fa;
+            border-color: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 42px rgba(0, 0, 0, 0.24);
+        }
+
+        body.dark-mode .schedule-subtitle,
+        body.dark-mode .calendar-subtitle,
+        body.dark-mode .planner-subtitle,
+        body.dark-mode .legend-note,
+        body.dark-mode .planner-note,
+        body.dark-mode .calendar-day-note,
+        body.dark-mode .planner-stat span {
+            color: #b7c8cf;
+        }
+
+        body.dark-mode .schedule-kicker,
+        body.dark-mode .calendar-weekday,
+        body.dark-mode .calendar-day-number,
+        body.dark-mode .legend-pill,
+        body.dark-mode .calendar-count.empty {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #dff6fb;
+        }
+
+        body.dark-mode #dark-mode-btn {
+            background: linear-gradient(135deg, rgba(110, 210, 234, 0.16), rgba(72, 156, 179, 0.22));
+            color: #eefbfd;
+            box-shadow: 0 18px 34px rgba(0, 0, 0, 0.26);
+        }
+
+        body.dark-mode .calendar-day.is-selected .calendar-day-number,
+        body.dark-mode .schedule-slot.is-active,
+        body.dark-mode .schedule-action,
+        body.dark-mode .schedule-save {
+            background: linear-gradient(135deg, #6ed2ea, #3fb9d7);
+            color: #08202a;
+        }
+
+        body.dark-mode .schedule-secondary-action,
+        body.dark-mode .schedule-month-button,
+        body.dark-mode .schedule-slot {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #edf7fa;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .calendar-count.open {
+            background-color: rgba(72, 199, 116, 0.16);
+            color: #98f2bb;
+        }
+
+        body.dark-mode .calendar-count.booked,
+        body.dark-mode .schedule-slot.is-booked {
+            background-color: rgba(110, 210, 234, 0.14);
+            color: #dff6fb;
+        }
+
+        body.dark-mode .calendar-count.closed,
+        body.dark-mode .legend-pill.closed {
+            background-color: rgba(233, 99, 99, 0.16);
+            color: #ffb4b4;
+        }
+
+        @media (max-width: 1199px) {
+            .schedule-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .schedule-hero {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .schedule-topbar {
+                grid-template-columns: 1fr;
+                justify-items: center;
+            }
+
+            .schedule-topbar-actions {
+                justify-self: center;
+            }
+
+            .schedule-card {
+                padding: 22px;
+                border-radius: 24px;
+            }
+
+            .calendar-weekdays,
+            .calendar-grid-days {
+                gap: 8px;
+            }
+
+            .calendar-day {
+                min-height: 108px;
+                padding: 12px 10px;
+            }
+
+            .time-slots {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .planner-summary {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .time-slots {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .calendar-day-note {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body class="schedule-page">
+    <header class="schedule-header">
+        <div class="container-md schedule-topbar">
+            <div class="schedule-topbar-spacer" aria-hidden="true"></div>
+            <a class="schedule-logo" href="index.html">
+                <img src="/images/medicina.webp" alt="Health and Care logo">
+                <span>Health and Care</span>
+            </a>
+            <div class="schedule-topbar-actions">
+                <button id="dark-mode-btn" type="button">Tumsas režīms</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container-md schedule-shell">
+        <section class="schedule-card">
+            <div class="schedule-hero">
+                <div>
+                    <div class="schedule-kicker">
+                        <i class="fa-solid fa-calendar-days"></i>
+                        Ārsta pieejamība
+                    </div>
+                    <h1 class="schedule-title">Plāno savu grafiku</h1>
+                    <p class="schedule-subtitle">
+                        Izvēlies kalendārā dienu un atzīmē precīzus 15 minūšu laikus, kuros pacienti drīkst pieteikties.
+                        Aizņemtie laiki tiek atzīmēti atsevišķi un netiek rādīti citiem lietotājiem.
+                    </p>
+                </div>
+                <div class="schedule-hero-actions">
+                    <button id="backToCabinetBtn" class="schedule-secondary-action" type="button">Atpakaļ uz kabinetu</button>
+                </div>
+            </div>
+
+            <p id="schedulePageMessage" class="schedule-message" aria-live="polite"></p>
+
+            <div class="schedule-grid">
+                <section class="schedule-panel">
+                    <div class="calendar-toolbar">
+                        <div>
+                            <h2 id="currentMonthLabel" class="calendar-title">Kalendārs</h2>
+                            <p class="calendar-subtitle">Spied uz dienas lauciņa, lai pārvaldītu tās pieejamos laikus.</p>
+                        </div>
+                        <div class="schedule-hero-actions">
+                            <button id="prevMonthBtn" class="schedule-month-button" type="button">Iepriekšējais</button>
+                            <button id="nextMonthBtn" class="schedule-month-button" type="button">Nākamais</button>
+                        </div>
+                    </div>
+
+                    <div class="calendar-legend">
+                        <span class="legend-pill open">Brīvie laiki</span>
+                        <span class="legend-pill booked">Esošie pieraksti</span>
+                        <span class="legend-pill closed">Slēgta diena</span>
+                    </div>
+                    <p class="legend-note">Kalendārā redzēsi, cik dienā ir brīvu laiku un cik jau aizņemtu pierakstu.</p>
+
+                    <div class="calendar-weekdays">
+                        <div class="calendar-weekday">P</div>
+                        <div class="calendar-weekday">O</div>
+                        <div class="calendar-weekday">T</div>
+                        <div class="calendar-weekday">C</div>
+                        <div class="calendar-weekday">Pk</div>
+                        <div class="calendar-weekday">S</div>
+                        <div class="calendar-weekday">Sv</div>
+                    </div>
+
+                    <div id="calendarGrid" class="calendar-grid-days"></div>
+                </section>
+
+                <aside class="schedule-panel">
+                    <div class="planner-header">
+                        <h2 id="plannerDateTitle" class="planner-title">Izvēlies dienu</h2>
+                        <p id="plannerDateSubtitle" class="planner-subtitle">Te parādīsies konkrētās dienas laika sloti.</p>
+                    </div>
+
+                    <div class="planner-summary">
+                        <div class="planner-stat">
+                            <span>Brīvie laiki</span>
+                            <strong id="openSlotCount">0</strong>
+                        </div>
+                        <div class="planner-stat">
+                            <span>Rezervētie laiki</span>
+                            <strong id="bookedSlotCount">0</strong>
+                        </div>
+                        <div class="planner-stat">
+                            <span>Kopā ieplānots</span>
+                            <strong id="configuredSlotCount">0</strong>
+                        </div>
+                    </div>
+
+                    <p id="plannerMessage" class="planner-message" aria-live="polite"></p>
+                    <p id="plannerNote" class="planner-note">
+                        Aktīvie sloti ir redzami pacientiem. Slotus ar esošu pierakstu nevar noņemt no grafika.
+                    </p>
+
+                    <div id="timeSlots" class="time-slots">
+                        <div class="planner-empty">Iezīmē dienu kalendārā, lai ielādētu tās pieejamos laikus.</div>
+                    </div>
+
+                    <div class="planner-actions">
+                        <button id="selectAllBtn" class="schedule-secondary-action" type="button">Atzīmēt visu dienu</button>
+                        <button id="clearDayBtn" class="schedule-secondary-action" type="button">Notīrīt brīvos laikus</button>
+                        <button id="saveScheduleBtn" class="schedule-save" type="button">Saglabāt grafiku</button>
+                    </div>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <script src="/assets/js/script.js"></script>
+    <script src="/assets/js/doctor_schedule.js"></script>
+</body>
+</html>

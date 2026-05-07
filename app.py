@@ -7,7 +7,7 @@ import re
 import sqlite3
 import unicodedata
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, time
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -31,8 +31,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "app.db"
 HTML_PAGES = {path.name for path in BASE_DIR.glob("*.html")}
-ACCOUNT_ONLY_PAGES = {"user_cab.html", "pieteikties.html"}
+ACCOUNT_ONLY_PAGES = {"user_cab.html", "pieteikties.html", "doctor-schedule.html"}
 PATIENT_ONLY_PAGES = {"pieteikties.html"}
+DOCTOR_ONLY_PAGES = {"doctor-schedule.html"}
 ADMIN_ONLY_PAGES = {
     "admin-panel.html",
     "admin-users.html",
@@ -44,6 +45,14 @@ ADMIN_ONLY_PAGES = {
     "pieteikumi-adm.html",
 }
 DOCTOR_PROCEDURES = {"datortomografija", "gimenesArsts", "vakcinacija"}
+DOCTOR_APPROVAL_PENDING = "pending"
+DOCTOR_APPROVAL_APPROVED = "approved"
+DOCTOR_APPROVAL_CANCELLED = "cancelled"
+DOCTOR_APPROVAL_STATUSES = {
+    DOCTOR_APPROVAL_PENDING,
+    DOCTOR_APPROVAL_APPROVED,
+    DOCTOR_APPROVAL_CANCELLED,
+}
 DOCTOR_APPOINTMENT_MESSAGE = "Ārsta kontam procedūru pieteikšana nav pieejama."
 
 SERVICE_DESCRIPTION_MAP = {
@@ -255,18 +264,20 @@ def fetch_chatbot_doctors(service_key: str | None = None) -> list[sqlite3.Row]:
             """
             SELECT id, name, surname, procedure
             FROM doctors
-            WHERE procedure = ?
+            WHERE procedure = ? AND approval_status = ?
             ORDER BY surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
             """,
-            (service_key,),
+            (service_key, DOCTOR_APPROVAL_APPROVED),
         ).fetchall()
 
     return db.execute(
         """
         SELECT id, name, surname, procedure
         FROM doctors
+        WHERE approval_status = ?
         ORDER BY procedure ASC, surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
-        """
+        """,
+        (DOCTOR_APPROVAL_APPROVED,),
     ).fetchall()
 
 
@@ -619,6 +630,28 @@ def add_months(source_date: date, months: int) -> date:
     return date(year, month, day)
 
 
+def parse_iso_date(value: str) -> date | None:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def parse_iso_time(value: str) -> time | None:
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except ValueError:
+        return None
+
+
+def validate_booking_window(target_date: date) -> str | None:
+    today = date.today()
+    max_date = add_months(today, 3)
+    if target_date < today or target_date > max_date:
+        return "Pieteikties var tikai no šodienas līdz 3 mēnešiem uz priekšu."
+    return None
+
+
 def get_working_hours_for_date(target_date: date) -> tuple[int, int] | None:
     weekday = target_date.weekday()
     if weekday <= 4:
@@ -629,21 +662,17 @@ def get_working_hours_for_date(target_date: date) -> tuple[int, int] | None:
 
 
 def validate_appointment_schedule(datums: str, laiks: str) -> str | None:
-    try:
-        appointment_date = datetime.strptime(datums, "%Y-%m-%d").date()
-    except ValueError:
+    appointment_date = parse_iso_date(datums)
+    if appointment_date is None:
         return "Lūdzu izvēlieties korektu datumu."
 
-    try:
-        appointment_time = datetime.strptime(laiks, "%H:%M").time()
-    except ValueError:
+    appointment_time = parse_iso_time(laiks)
+    if appointment_time is None:
         return "Lūdzu izvēlieties korektu laiku."
 
-    today = date.today()
-    max_date = add_months(today, 3)
-
-    if appointment_date < today or appointment_date > max_date:
-        return "Pieteikties var tikai no šodienas līdz 3 mēnešiem uz priekšu."
+    booking_window_error = validate_booking_window(appointment_date)
+    if booking_window_error:
+        return booking_window_error
 
     working_hours = get_working_hours_for_date(appointment_date)
     if working_hours is None:
@@ -666,6 +695,8 @@ APPOINTMENT_DUPLICATE_MESSAGE = (
     "Uz šo procedūru Jums jau ir aktīvs pieteikums. "
     "Vienlaikus var būt tikai viens pieteikums katrai procedūrai."
 )
+DOCTOR_SLOT_UNAVAILABLE_MESSAGE = "Ārsts šajā datumā un laikā nav pieejams."
+DOCTOR_SLOT_ALREADY_BOOKED_MESSAGE = "Šis laiks vairs nav pieejams. Lūdzu izvēlieties citu laiku."
 
 
 def appointment_owner_column(role: str) -> str:
@@ -713,6 +744,26 @@ def is_valid_doctor_procedure(procedure: str) -> bool:
     return procedure in DOCTOR_PROCEDURES
 
 
+def is_valid_doctor_approval_status(status: str) -> bool:
+    return status in DOCTOR_APPROVAL_STATUSES
+
+
+def doctor_has_access(row: sqlite3.Row | dict[str, Any]) -> bool:
+    if isinstance(row, sqlite3.Row):
+        status = row["approval_status"]
+    else:
+        status = row.get("approval_status")
+    return status == DOCTOR_APPROVAL_APPROVED
+
+
+def doctor_access_denied_message(status: str | None) -> str:
+    if status == DOCTOR_APPROVAL_PENDING:
+        return "Ārsta profils vēl gaida administratora apstiprinājumu."
+    if status == DOCTOR_APPROVAL_CANCELLED:
+        return "Ārsta profils ir atcelts. Sazinieties ar administratoru."
+    return "Ārsta profils nav pieejams."
+
+
 def doctor_display_name(name: str | None, surname: str | None) -> str:
     return " ".join(part for part in [name or "", surname or ""] if part).strip()
 
@@ -739,9 +790,9 @@ def validate_appointment_doctor(doctor_id: Any, procedura: str) -> sqlite3.Row |
     return get_db().execute(
         """
         SELECT * FROM doctors
-        WHERE id = ? AND procedure = ?
+        WHERE id = ? AND procedure = ? AND approval_status = ?
         """,
-        (doctor_identifier, procedura),
+        (doctor_identifier, procedura, DOCTOR_APPROVAL_APPROVED),
     ).fetchone()
 
 
@@ -781,8 +832,213 @@ def public_doctor_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         "password_updated_at": row["password_updated_at"],
         "role": "doctor",
         "procedure": row["procedure"],
+        "approval_status": row["approval_status"],
+        "status_updated_at": row["status_updated_at"],
         "can_book_appointments": False,
     }
+
+
+def parse_month_value(value: str) -> tuple[date, date] | None:
+    parts = value.split("-")
+    if len(parts) != 2:
+        return None
+
+    try:
+        year = int(parts[0])
+        month = int(parts[1])
+    except ValueError:
+        return None
+
+    if month < 1 or month > 12:
+        return None
+
+    month_start = date(year, month, 1)
+    month_end = date(year, month, calendar.monthrange(year, month)[1])
+    return month_start, month_end
+
+
+def serialize_time_from_minutes(total_minutes: int) -> str:
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def build_time_slots_for_date(target_date: date) -> list[str]:
+    working_hours = get_working_hours_for_date(target_date)
+    if working_hours is None:
+        return []
+
+    opening_minutes, closing_minutes = working_hours
+    return [
+        serialize_time_from_minutes(total_minutes)
+        for total_minutes in range(opening_minutes, closing_minutes + 1, 15)
+    ]
+
+
+def get_doctor_configured_times(doctor_id: int, datums: str) -> list[str]:
+    rows = get_db().execute(
+        """
+        SELECT available_time
+        FROM doctor_availability
+        WHERE doctor_id = ? AND available_date = ?
+        ORDER BY available_time ASC
+        """,
+        (doctor_id, datums),
+    ).fetchall()
+    return [row["available_time"] for row in rows]
+
+
+def get_doctor_booked_times(
+    doctor_id: int,
+    datums: str,
+    *,
+    exclude_appointment_id: int | None = None,
+) -> list[str]:
+    query = """
+        SELECT laiks
+        FROM appointments
+        WHERE doctor_id = ? AND datums = ?
+    """
+    params: list[Any] = [doctor_id, datums]
+    if exclude_appointment_id is not None:
+        query += " AND id != ?"
+        params.append(exclude_appointment_id)
+
+    query += " ORDER BY laiks ASC"
+    rows = get_db().execute(query, params).fetchall()
+    return [row["laiks"] for row in rows]
+
+
+def build_doctor_day_schedule_payload(
+    doctor_id: int,
+    target_date: date,
+    *,
+    exclude_appointment_id: int | None = None,
+) -> dict[str, Any]:
+    date_value = target_date.isoformat()
+    configured_times = get_doctor_configured_times(doctor_id, date_value)
+    booked_times = get_doctor_booked_times(
+        doctor_id,
+        date_value,
+        exclude_appointment_id=exclude_appointment_id,
+    )
+    booked_time_set = set(booked_times)
+    working_hours = get_working_hours_for_date(target_date)
+
+    return {
+        "date": date_value,
+        "opening_time": serialize_time_from_minutes(working_hours[0]) if working_hours else None,
+        "closing_time": serialize_time_from_minutes(working_hours[1]) if working_hours else None,
+        "configured_times": configured_times,
+        "booked_times": booked_times,
+        "open_times": [time_value for time_value in configured_times if time_value not in booked_time_set],
+    }
+
+
+def build_doctor_month_schedule_summary(
+    doctor_id: int,
+    month_start: date,
+    month_end: date,
+) -> dict[str, dict[str, int]]:
+    db = get_db()
+    date_from = month_start.isoformat()
+    date_to = month_end.isoformat()
+    summary: dict[str, dict[str, int]] = {}
+
+    open_rows = db.execute(
+        """
+        SELECT a.available_date AS date_value, COUNT(*) AS open_slots
+        FROM doctor_availability AS a
+        LEFT JOIN appointments AS ap
+            ON ap.doctor_id = a.doctor_id
+           AND ap.datums = a.available_date
+           AND ap.laiks = a.available_time
+        WHERE a.doctor_id = ?
+          AND a.available_date BETWEEN ? AND ?
+          AND ap.id IS NULL
+        GROUP BY a.available_date
+        """,
+        (doctor_id, date_from, date_to),
+    ).fetchall()
+    for row in open_rows:
+        summary[row["date_value"]] = {
+            "open_slots": row["open_slots"],
+            "booked_slots": 0,
+            "configured_slots": row["open_slots"],
+        }
+
+    booked_rows = db.execute(
+        """
+        SELECT datums AS date_value, COUNT(*) AS booked_slots
+        FROM appointments
+        WHERE doctor_id = ?
+          AND datums BETWEEN ? AND ?
+        GROUP BY datums
+        """,
+        (doctor_id, date_from, date_to),
+    ).fetchall()
+    for row in booked_rows:
+        day_summary = summary.setdefault(
+            row["date_value"],
+            {"open_slots": 0, "booked_slots": 0, "configured_slots": 0},
+        )
+        day_summary["booked_slots"] = row["booked_slots"]
+        day_summary["configured_slots"] = day_summary["open_slots"] + row["booked_slots"]
+
+    return summary
+
+
+def get_doctor_open_dates(doctor_id: int) -> list[dict[str, Any]]:
+    today = date.today().isoformat()
+    max_date = add_months(date.today(), 3).isoformat()
+    rows = get_db().execute(
+        """
+        SELECT a.available_date AS date_value, COUNT(*) AS open_slots
+        FROM doctor_availability AS a
+        LEFT JOIN appointments AS ap
+            ON ap.doctor_id = a.doctor_id
+           AND ap.datums = a.available_date
+           AND ap.laiks = a.available_time
+        WHERE a.doctor_id = ?
+          AND a.available_date BETWEEN ? AND ?
+          AND ap.id IS NULL
+        GROUP BY a.available_date
+        ORDER BY a.available_date ASC
+        """,
+        (doctor_id, today, max_date),
+    ).fetchall()
+
+    return [
+        {
+            "date": row["date_value"],
+            "open_slots": row["open_slots"],
+        }
+        for row in rows
+    ]
+
+
+def validate_doctor_slot_selection(
+    doctor_id: int,
+    datums: str,
+    laiks: str,
+    *,
+    exclude_appointment_id: int | None = None,
+) -> tuple[str | None, int | None]:
+    configured_times = set(get_doctor_configured_times(doctor_id, datums))
+    if laiks not in configured_times:
+        return DOCTOR_SLOT_UNAVAILABLE_MESSAGE, 400
+
+    booked_times = set(
+        get_doctor_booked_times(
+            doctor_id,
+            datums,
+            exclude_appointment_id=exclude_appointment_id,
+        )
+    )
+    if laiks in booked_times:
+        return DOCTOR_SLOT_ALREADY_BOOKED_MESSAGE, 409
+
+    return None, None
 
 
 def current_user_row() -> sqlite3.Row | None:
@@ -809,6 +1065,9 @@ def current_account() -> dict[str, Any] | None:
 
     doctor = current_doctor_row()
     if doctor is not None:
+        if not doctor_has_access(doctor):
+            clear_account_session()
+            return None
         return {
             "role": "doctor",
             **row_to_dict(doctor),
@@ -1087,8 +1346,20 @@ def init_db() -> None:
             email TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             procedure TEXT NOT NULL,
+            approval_status TEXT NOT NULL DEFAULT 'approved',
             created_at TEXT NOT NULL,
-            password_updated_at TEXT NOT NULL
+            password_updated_at TEXT NOT NULL,
+            status_updated_at TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS doctor_availability (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doctor_id INTEGER NOT NULL,
+            available_date TEXT NOT NULL,
+            available_time TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS appointments (
@@ -1151,6 +1422,9 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_doctor_availability_slot
+        ON doctor_availability (doctor_id, available_date, available_time);
         """
     )
 
@@ -1160,6 +1434,43 @@ def init_db() -> None:
     }
     if "doctor_id" not in appointment_columns:
         connection.execute("ALTER TABLE appointments ADD COLUMN doctor_id INTEGER")
+
+    doctor_columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(doctors)").fetchall()
+    }
+    if "approval_status" not in doctor_columns:
+        connection.execute(
+            "ALTER TABLE doctors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'"
+        )
+    if "status_updated_at" not in doctor_columns:
+        connection.execute(
+            "ALTER TABLE doctors ADD COLUMN status_updated_at TEXT NOT NULL DEFAULT ''"
+        )
+
+    connection.execute(
+        """
+        UPDATE doctors
+        SET approval_status = ?
+        WHERE approval_status IS NULL
+           OR TRIM(approval_status) = ''
+           OR approval_status NOT IN (?, ?, ?)
+        """,
+        (
+            DOCTOR_APPROVAL_APPROVED,
+            DOCTOR_APPROVAL_PENDING,
+            DOCTOR_APPROVAL_APPROVED,
+            DOCTOR_APPROVAL_CANCELLED,
+        ),
+    )
+    connection.execute(
+        """
+        UPDATE doctors
+        SET status_updated_at = COALESCE(NULLIF(status_updated_at, ''), created_at, password_updated_at, ?)
+        WHERE status_updated_at IS NULL OR TRIM(status_updated_at) = ''
+        """,
+        (now_iso(),),
+    )
 
     legacy_about_table = connection.execute(
         """
@@ -1341,6 +1652,12 @@ def pages(filename: str) -> Any:
         if account["role"] != "user":
             return redirect(url_for("pages", filename="user_cab.html"))
 
+    if filename in DOCTOR_ONLY_PAGES:
+        if account is None:
+            return redirect(url_for("pages", filename="login.html"))
+        if account["role"] != "doctor":
+            return redirect(url_for("pages", filename="user_cab.html"))
+
     if filename in ADMIN_ONLY_PAGES and not session.get("is_admin"):
         return redirect(url_for("pages", filename="admin-login.html"))
 
@@ -1423,8 +1740,19 @@ def api_register_doctor() -> Any:
     timestamp = now_iso()
     cursor = db.execute(
         """
-        INSERT INTO doctors (name, surname, phone, email, password_hash, procedure, created_at, password_updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO doctors (
+            name,
+            surname,
+            phone,
+            email,
+            password_hash,
+            procedure,
+            approval_status,
+            created_at,
+            password_updated_at,
+            status_updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             name,
@@ -1433,6 +1761,8 @@ def api_register_doctor() -> Any:
             email,
             generate_password_hash(password),
             procedure,
+            DOCTOR_APPROVAL_PENDING,
+            timestamp,
             timestamp,
             timestamp,
         ),
@@ -1442,7 +1772,7 @@ def api_register_doctor() -> Any:
     doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (cursor.lastrowid,)).fetchone()
     return jsonify(
         {
-            "message": "Doctor registration successful",
+            "message": "Doctor registration successful. Waiting for admin approval.",
             "user": public_doctor_dict(doctor),
         }
     ), 201
@@ -1486,6 +1816,8 @@ def api_login() -> Any:
     ).fetchone()
     if doctor is None or not check_password_hash(doctor["password_hash"], password):
         return jsonify({"error": "Invalid email or password"}), 401
+    if not doctor_has_access(doctor):
+        return jsonify({"error": doctor_access_denied_message(doctor["approval_status"])}), 403
 
     session["doctor_id"] = doctor["id"]
     return jsonify(
@@ -1647,6 +1979,164 @@ def api_delete_my_appointment(account: dict[str, Any], appointment_id: int) -> A
     return jsonify({"message": "Appointment cancelled successfully"})
 
 
+@app.get("/api/doctor/schedule")
+@doctor_required
+def api_doctor_schedule(account: dict[str, Any]) -> Any:
+    month_value = str(request.args.get("month", "")).strip()
+    date_value = str(request.args.get("date", "")).strip()
+
+    if month_value:
+        month_range = parse_month_value(month_value)
+        if month_range is None:
+            return jsonify({"error": "Lūdzu izvēlieties korektu mēnesi."}), 400
+
+        month_start, month_end = month_range
+        today = date.today()
+        max_date = add_months(today, 3)
+        if month_end < today or month_start > max_date:
+            return jsonify({"error": "Grafiku var plānot tikai no šī brīža līdz 3 mēnešiem uz priekšu."}), 400
+
+        return jsonify(
+            {
+                "month": month_value,
+                "days": build_doctor_month_schedule_summary(
+                    account["id"],
+                    month_start,
+                    month_end,
+                ),
+            }
+        )
+
+    if date_value:
+        target_date = parse_iso_date(date_value)
+        if target_date is None:
+            return jsonify({"error": "Lūdzu izvēlieties korektu datumu."}), 400
+
+        booking_window_error = validate_booking_window(target_date)
+        if booking_window_error:
+            return jsonify({"error": booking_window_error}), 400
+
+        return jsonify(build_doctor_day_schedule_payload(account["id"], target_date))
+
+    return jsonify({"error": "Lūdzu norādiet datumu vai mēnesi."}), 400
+
+
+@app.put("/api/doctor/schedule")
+@doctor_required
+def api_update_doctor_schedule(account: dict[str, Any]) -> Any:
+    payload = request.get_json(silent=True) or {}
+    date_value = str(payload.get("date", "")).strip()
+    raw_times = payload.get("available_times", [])
+
+    target_date = parse_iso_date(date_value)
+    if target_date is None:
+        return jsonify({"error": "Lūdzu izvēlieties korektu datumu."}), 400
+
+    booking_window_error = validate_booking_window(target_date)
+    if booking_window_error:
+        return jsonify({"error": booking_window_error}), 400
+
+    working_hours = get_working_hours_for_date(target_date)
+    if working_hours is None:
+        return jsonify({"error": "Svētdienās grafiku plānot nevar, jo klīnika ir slēgta."}), 400
+
+    if not isinstance(raw_times, list):
+        return jsonify({"error": "Pieejamajiem laikiem jābūt sarakstā."}), 400
+
+    normalized_times: set[str] = set()
+    for raw_time in raw_times:
+        time_value = str(raw_time).strip()
+        time_error = validate_appointment_schedule(date_value, time_value)
+        if time_error:
+            return jsonify({"error": time_error}), 400
+        normalized_times.add(time_value)
+
+    booked_times = set(get_doctor_booked_times(account["id"], date_value))
+    final_times = sorted(normalized_times | booked_times)
+
+    timestamp = now_iso()
+    db = get_db()
+    db.execute(
+        """
+        DELETE FROM doctor_availability
+        WHERE doctor_id = ? AND available_date = ?
+        """,
+        (account["id"], date_value),
+    )
+
+    if final_times:
+        db.executemany(
+            """
+            INSERT INTO doctor_availability (
+                doctor_id, available_date, available_time, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (account["id"], date_value, time_value, timestamp, timestamp)
+                for time_value in final_times
+            ],
+        )
+
+    db.commit()
+    return jsonify(build_doctor_day_schedule_payload(account["id"], target_date))
+
+
+@app.get("/api/doctors/<int:doctor_id>/available-slots")
+@patient_required
+def api_doctor_available_slots(account: dict[str, Any], doctor_id: int) -> Any:
+    del account
+    procedura = str(request.args.get("procedura", "")).strip()
+    date_value = str(request.args.get("date", "")).strip()
+
+    if not procedura or not is_valid_doctor_procedure(procedura):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    target_date = parse_iso_date(date_value)
+    if target_date is None:
+        return jsonify({"error": "Lūdzu izvēlieties korektu datumu."}), 400
+
+    booking_window_error = validate_booking_window(target_date)
+    if booking_window_error:
+        return jsonify({"error": booking_window_error}), 400
+
+    doctor = validate_appointment_doctor(doctor_id, procedura)
+    if doctor is None:
+        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 404
+
+    if get_working_hours_for_date(target_date) is None:
+        return jsonify({"date": date_value, "available_times": []})
+
+    schedule_payload = build_doctor_day_schedule_payload(doctor["id"], target_date)
+    return jsonify(
+        {
+            "date": date_value,
+            "available_times": schedule_payload["open_times"],
+        }
+    )
+
+
+@app.get("/api/doctors/<int:doctor_id>/available-dates")
+@patient_required
+def api_doctor_available_dates(account: dict[str, Any], doctor_id: int) -> Any:
+    del account
+    procedura = str(request.args.get("procedura", "")).strip()
+
+    if not procedura or not is_valid_doctor_procedure(procedura):
+        return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+
+    doctor = validate_appointment_doctor(doctor_id, procedura)
+    if doctor is None:
+        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 404
+
+    return jsonify(
+        {
+            "doctor_id": doctor["id"],
+            "available_dates": get_doctor_open_dates(doctor["id"]),
+        }
+    )
+
+
 @app.get("/api/catalog")
 def api_catalog() -> Any:
     db = get_db()
@@ -1747,10 +2237,10 @@ def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
         """
         SELECT id, name, surname, procedure
         FROM doctors
-        WHERE procedure = ?
+        WHERE procedure = ? AND approval_status = ?
         ORDER BY surname COLLATE NOCASE ASC, name COLLATE NOCASE ASC, id ASC
         """,
-        (procedura,),
+        (procedura, DOCTOR_APPROVAL_APPROVED),
     ).fetchall()
     return jsonify([public_doctor_option_dict(row) for row in rows])
 
@@ -1912,44 +2402,61 @@ def api_create_appointment(account: dict[str, Any]) -> Any:
     if schedule_error:
         return jsonify({"error": schedule_error}), 400
 
-    doctor = validate_appointment_doctor(raw_doctor_id, procedura)
-    if doctor is None:
-        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
-
-    existing_appointment = find_active_procedure_appointment(
-        "user",
-        account["id"],
-        procedura,
-    )
-    if existing_appointment is not None:
-        return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
-
     timestamp = now_iso()
     db = get_db()
-    cursor = db.execute(
-        """
-        INSERT INTO appointments (
-            user_id, doctor_id, name, surname, phone, email, procedura, datums, laiks, adrese, comment, created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
+    try:
+        db.execute("BEGIN IMMEDIATE")
+
+        doctor = validate_appointment_doctor(raw_doctor_id, procedura)
+        if doctor is None:
+            db.rollback()
+            return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
+
+        existing_appointment = find_active_procedure_appointment(
+            "user",
             account["id"],
-            doctor["id"],
-            name,
-            surname,
-            phone,
-            email,
             procedura,
+        )
+        if existing_appointment is not None:
+            db.rollback()
+            return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
+
+        slot_error, slot_status = validate_doctor_slot_selection(
+            doctor["id"],
             datums,
             laiks,
-            adrese,
-            comment,
-            timestamp,
-            timestamp,
-        ),
-    )
-    db.commit()
+        )
+        if slot_error:
+            db.rollback()
+            return jsonify({"error": slot_error}), slot_status or 400
+
+        cursor = db.execute(
+            """
+            INSERT INTO appointments (
+                user_id, doctor_id, name, surname, phone, email, procedura, datums, laiks, adrese, comment, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                account["id"],
+                doctor["id"],
+                name,
+                surname,
+                phone,
+                email,
+                procedura,
+                datums,
+                laiks,
+                adrese,
+                comment,
+                timestamp,
+                timestamp,
+            ),
+        )
+        db.commit()
+    except sqlite3.Error:
+        db.rollback()
+        raise
 
     appointment = db.execute(
         """
@@ -2111,6 +2618,9 @@ def api_admin_create_doctor() -> Any:
     phone = str(payload.get("phone", "")).strip()
     email = str(payload.get("email", "")).strip().lower()
     procedure = str(payload.get("procedure", "")).strip()
+    approval_status = str(
+        payload.get("approval_status", DOCTOR_APPROVAL_APPROVED)
+    ).strip().lower()
     password = str(payload.get("password", "")).strip()
 
     if not all([name, email, procedure, password]):
@@ -2118,6 +2628,8 @@ def api_admin_create_doctor() -> Any:
 
     if not is_valid_doctor_procedure(procedure):
         return jsonify({"error": "Lūdzu izvēlieties korektu procedūru."}), 400
+    if not is_valid_doctor_approval_status(approval_status):
+        return jsonify({"error": "Lūdzu izvēlieties korektu ārsta statusu."}), 400
 
     db = get_db()
     if doctor_email_exists(email):
@@ -2126,8 +2638,19 @@ def api_admin_create_doctor() -> Any:
     timestamp = now_iso()
     cursor = db.execute(
         """
-        INSERT INTO doctors (name, surname, phone, email, password_hash, procedure, created_at, password_updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO doctors (
+            name,
+            surname,
+            phone,
+            email,
+            password_hash,
+            procedure,
+            approval_status,
+            created_at,
+            password_updated_at,
+            status_updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             name,
@@ -2136,6 +2659,8 @@ def api_admin_create_doctor() -> Any:
             email,
             generate_password_hash(password),
             procedure,
+            approval_status,
+            timestamp,
             timestamp,
             timestamp,
         ),
@@ -2168,6 +2693,7 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
     phone = str(payload.get("phone", "")).strip()
     email = str(payload.get("email", "")).strip().lower()
     procedure = str(payload.get("procedure", "")).strip()
+    approval_status = str(payload.get("approval_status", "")).strip().lower()
     password = str(payload.get("password", "")).strip()
 
     if not all([name, email, procedure]):
@@ -2181,19 +2707,34 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
     if doctor is None:
         return jsonify({"error": "Doctor not found"}), 404
 
+    if not approval_status:
+        approval_status = doctor["approval_status"]
+    if not is_valid_doctor_approval_status(approval_status):
+        return jsonify({"error": "Lūdzu izvēlieties korektu ārsta statusu."}), 400
+
     if doctor_email_exists(email, exclude_doctor_id=doctor_id):
         return jsonify({"error": "Doctor with this email already exists"}), 409
 
     timestamp = now_iso()
     password_hash = doctor["password_hash"]
+    password_updated_at = doctor["password_updated_at"]
     procedure_changed = doctor["procedure"] != procedure
+    status_changed = doctor["approval_status"] != approval_status
+    status_updated_at = doctor["status_updated_at"]
+    deactivate_doctor = (
+        doctor["approval_status"] == DOCTOR_APPROVAL_APPROVED
+        and approval_status != DOCTOR_APPROVAL_APPROVED
+    )
     if password:
         password_hash = generate_password_hash(password)
+        password_updated_at = timestamp
+    if status_changed:
+        status_updated_at = timestamp
 
     db.execute(
         """
         UPDATE doctors
-        SET name = ?, surname = ?, phone = ?, email = ?, password_hash = ?, procedure = ?, password_updated_at = ?
+        SET name = ?, surname = ?, phone = ?, email = ?, password_hash = ?, procedure = ?, approval_status = ?, password_updated_at = ?, status_updated_at = ?
         WHERE id = ?
         """,
         (
@@ -2203,11 +2744,13 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
             email,
             password_hash,
             procedure,
-            timestamp,
+            approval_status,
+            password_updated_at,
+            status_updated_at,
             doctor_id,
         ),
     )
-    if procedure_changed:
+    if procedure_changed or deactivate_doctor:
         db.execute(
             """
             UPDATE appointments
@@ -2218,6 +2761,51 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
         )
     db.commit()
 
+    updated_doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
+    return jsonify(public_doctor_dict(updated_doctor))
+
+
+@app.put("/api/admin/doctors/<int:doctor_id>/status")
+@admin_required
+def api_admin_update_doctor_status(doctor_id: int) -> Any:
+    payload = request.get_json(silent=True) or {}
+    approval_status = str(payload.get("approval_status", "")).strip().lower()
+
+    if not is_valid_doctor_approval_status(approval_status):
+        return jsonify({"error": "Lūdzu izvēlieties korektu ārsta statusu."}), 400
+
+    db = get_db()
+    doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
+    if doctor is None:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    if doctor["approval_status"] == approval_status:
+        return jsonify(public_doctor_dict(doctor))
+
+    timestamp = now_iso()
+    db.execute(
+        """
+        UPDATE doctors
+        SET approval_status = ?, status_updated_at = ?
+        WHERE id = ?
+        """,
+        (approval_status, timestamp, doctor_id),
+    )
+
+    if (
+        doctor["approval_status"] == DOCTOR_APPROVAL_APPROVED
+        and approval_status != DOCTOR_APPROVAL_APPROVED
+    ):
+        db.execute(
+            """
+            UPDATE appointments
+            SET doctor_id = NULL, updated_at = ?
+            WHERE doctor_id = ?
+            """,
+            (timestamp, doctor_id),
+        )
+
+    db.commit()
     updated_doctor = db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)).fetchone()
     return jsonify(public_doctor_dict(updated_doctor))
 
@@ -2549,53 +3137,77 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
 
     db = get_db()
     appointment = db.execute(
-        "SELECT id, user_id, doctor_id FROM appointments WHERE id = ?",
+        "SELECT id, user_id, doctor_id, datums, laiks FROM appointments WHERE id = ?",
         (appointment_id,),
     ).fetchone()
     if appointment is None:
         return jsonify({"error": "Appointment not found"}), 404
 
-    owner_role = "user"
-    owner_id = appointment["user_id"]
-    if owner_id is not None:
-        conflicting_appointment = find_active_procedure_appointment(
-            owner_role,
-            owner_id,
-            procedura,
-            exclude_appointment_id=appointment_id,
+    try:
+        db.execute("BEGIN IMMEDIATE")
+
+        owner_role = "user"
+        owner_id = appointment["user_id"]
+        if owner_id is not None:
+            conflicting_appointment = find_active_procedure_appointment(
+                owner_role,
+                owner_id,
+                procedura,
+                exclude_appointment_id=appointment_id,
+            )
+            if conflicting_appointment is not None:
+                db.rollback()
+                return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
+
+        raw_doctor_id = payload.get("doctor_id", appointment["doctor_id"])
+        doctor = validate_appointment_doctor(raw_doctor_id, procedura)
+        if raw_doctor_id not in (None, "") and doctor is None and "doctor_id" in payload:
+            db.rollback()
+            return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
+
+        doctor_id = doctor["id"] if doctor is not None else None
+        current_slot_unchanged = (
+            doctor_id == appointment["doctor_id"]
+            and datums == appointment["datums"]
+            and laiks == appointment["laiks"]
         )
-        if conflicting_appointment is not None:
-            return jsonify({"error": APPOINTMENT_DUPLICATE_MESSAGE}), 409
 
-    raw_doctor_id = payload.get("doctor_id", appointment["doctor_id"])
-    doctor = validate_appointment_doctor(raw_doctor_id, procedura)
-    if raw_doctor_id not in (None, "") and doctor is None and "doctor_id" in payload:
-        return jsonify({"error": "Lūdzu izvēlieties ārstējošo ārstu šai procedūrai."}), 400
+        if doctor_id is not None and not current_slot_unchanged:
+            slot_error, slot_status = validate_doctor_slot_selection(
+                doctor_id,
+                datums,
+                laiks,
+                exclude_appointment_id=appointment_id,
+            )
+            if slot_error:
+                db.rollback()
+                return jsonify({"error": slot_error}), slot_status or 400
 
-    doctor_id = doctor["id"] if doctor is not None else None
-
-    db.execute(
-        """
-        UPDATE appointments
-        SET name = ?, surname = ?, phone = ?, email = ?, procedura = ?, doctor_id = ?, datums = ?, laiks = ?, adrese = ?, comment = ?, updated_at = ?
-        WHERE id = ?
-        """,
-        (
-            name,
-            surname,
-            phone,
-            email,
-            procedura,
-            doctor_id,
-            datums,
-            laiks,
-            adrese,
-            comment,
-            now_iso(),
-            appointment_id,
-        ),
-    )
-    db.commit()
+        db.execute(
+            """
+            UPDATE appointments
+            SET name = ?, surname = ?, phone = ?, email = ?, procedura = ?, doctor_id = ?, datums = ?, laiks = ?, adrese = ?, comment = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                name,
+                surname,
+                phone,
+                email,
+                procedura,
+                doctor_id,
+                datums,
+                laiks,
+                adrese,
+                comment,
+                now_iso(),
+                appointment_id,
+            ),
+        )
+        db.commit()
+    except sqlite3.Error:
+        db.rollback()
+        raise
 
     updated_appointment = db.execute(
         """
