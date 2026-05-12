@@ -4,7 +4,6 @@ import html
 import json
 import os
 import re
-import sqlite3
 import unicodedata
 import calendar
 from datetime import date, datetime, time
@@ -25,11 +24,12 @@ from flask import (
     url_for,
     g,
 )
+import psycopg
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "app.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 HTML_PAGES = {path.name for path in BASE_DIR.glob("*.html")}
 ACCOUNT_ONLY_PAGES = {"user_cab.html", "pieteikties.html", "doctor-schedule.html"}
 PATIENT_ONLY_PAGES = {"pieteikties.html"}
@@ -257,7 +257,7 @@ def is_clinic_related_message(message: str) -> bool:
     return any(keyword in normalized_message for keyword in CHATBOT_CLINIC_KEYWORDS)
 
 
-def fetch_chatbot_doctors(service_key: str | None = None) -> list[sqlite3.Row]:
+def fetch_chatbot_doctors(service_key: str | None = None) -> list[DbRow]:
     db = get_db()
     if service_key:
         return db.execute(
@@ -281,7 +281,7 @@ def fetch_chatbot_doctors(service_key: str | None = None) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def fetch_chatbot_prices(service_label: str | None = None) -> list[sqlite3.Row]:
+def fetch_chatbot_prices(service_label: str | None = None) -> list[DbRow]:
     db = get_db()
     if service_label:
         return db.execute(
@@ -711,7 +711,7 @@ def find_active_procedure_appointment(
     procedura: str,
     *,
     exclude_appointment_id: int | None = None,
-) -> sqlite3.Row | None:
+) -> DbRow | None:
     if owner_id is None or not procedura:
         return None
 
@@ -748,8 +748,8 @@ def is_valid_doctor_approval_status(status: str) -> bool:
     return status in DOCTOR_APPROVAL_STATUSES
 
 
-def doctor_has_access(row: sqlite3.Row | dict[str, Any]) -> bool:
-    if isinstance(row, sqlite3.Row):
+def doctor_has_access(row: DbRow | dict[str, Any]) -> bool:
+    if isinstance(row, DbRow):
         status = row["approval_status"]
     else:
         status = row.get("approval_status")
@@ -768,7 +768,7 @@ def doctor_display_name(name: str | None, surname: str | None) -> str:
     return " ".join(part for part in [name or "", surname or ""] if part).strip()
 
 
-def appointment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+def appointment_to_dict(row: DbRow) -> dict[str, Any]:
     data = row_to_dict(row)
     if "doctor_name" in data or "doctor_surname" in data:
         data["doctor_full_name"] = doctor_display_name(
@@ -778,7 +778,7 @@ def appointment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return data
 
 
-def validate_appointment_doctor(doctor_id: Any, procedura: str) -> sqlite3.Row | None:
+def validate_appointment_doctor(doctor_id: Any, procedura: str) -> DbRow | None:
     if doctor_id in (None, ""):
         return None
 
@@ -796,7 +796,7 @@ def validate_appointment_doctor(doctor_id: Any, procedura: str) -> sqlite3.Row |
     ).fetchone()
 
 
-def public_doctor_option_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+def public_doctor_option_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -806,7 +806,7 @@ def public_doctor_option_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, An
     }
 
 
-def public_user_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+def public_user_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -821,7 +821,7 @@ def public_user_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def public_doctor_dict(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+def public_doctor_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -1041,14 +1041,14 @@ def validate_doctor_slot_selection(
     return None, None
 
 
-def current_user_row() -> sqlite3.Row | None:
+def current_user_row() -> DbRow | None:
     user_id = session.get("user_id")
     if not user_id:
         return None
     return get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
-def current_doctor_row() -> sqlite3.Row | None:
+def current_doctor_row() -> DbRow | None:
     doctor_id = session.get("doctor_id")
     if not doctor_id:
         return None
@@ -1076,7 +1076,7 @@ def current_account() -> dict[str, Any] | None:
     return None
 
 
-def public_account_dict(account: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+def public_account_dict(account: DbRow | dict[str, Any]) -> dict[str, Any]:
     if account["role"] == "doctor":
         return public_doctor_dict(account)
     return public_user_dict(account)
@@ -1303,12 +1303,109 @@ def load_about_data() -> list[dict[str, Any]]:
     return content_rows
 
 
-def get_db() -> sqlite3.Connection:
+class DbRow:
+    def __init__(self, columns: list[str], values: tuple[Any, ...]) -> None:
+        self._columns = columns
+        self._values = values
+        self._data = dict(zip(columns, values))
+
+    def __getitem__(self, key: str | int) -> Any:
+        if isinstance(key, int):
+            return self._values[key]
+        return self._data[key]
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def keys(self):
+        return self._data.keys()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+
+class PostgresCursor:
+    def __init__(self, cursor) -> None:
+        self._cursor = cursor
+        self.lastrowid: int | None = None
+
+    @property
+    def rowcount(self) -> int:
+        return self._cursor.rowcount
+
+    def fetchone(self) -> DbRow | None:
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        return self._make_row(row)
+
+    def fetchall(self) -> list[DbRow]:
+        return [self._make_row(row) for row in self._cursor.fetchall()]
+
+    def _make_row(self, row: tuple[Any, ...]) -> DbRow:
+        columns = [column.name for column in self._cursor.description or []]
+        return DbRow(columns, row)
+
+
+class PostgresConnection:
+    def __init__(self) -> None:
+        if not DATABASE_URL:
+            raise RuntimeError(
+                "DATABASE_URL is not configured. Add a PostgreSQL database in Coolify "
+                "and pass its connection string as DATABASE_URL."
+            )
+        self._connection = psycopg.connect(DATABASE_URL, autocommit=True)
+
+    def execute(self, query: str, params: tuple[Any, ...] | list[Any] = ()) -> PostgresCursor:
+        sql = self._prepare_query(query)
+        if sql.strip().upper() == "BEGIN IMMEDIATE":
+            sql = "BEGIN"
+
+        should_return_id = self._should_return_insert_id(sql)
+        if should_return_id:
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+
+        cursor = self._connection.cursor()
+        cursor.execute(sql, params)
+        wrapped = PostgresCursor(cursor)
+        if should_return_id:
+            row = cursor.fetchone()
+            wrapped.lastrowid = row[0] if row else None
+        return wrapped
+
+    def executemany(self, query: str, params_seq) -> PostgresCursor:
+        cursor = self._connection.cursor()
+        cursor.executemany(self._prepare_query(query), params_seq)
+        return PostgresCursor(cursor)
+
+    def executescript(self, script: str) -> None:
+        self._connection.execute(script)
+
+    def commit(self) -> None:
+        self._connection.commit()
+
+    def rollback(self) -> None:
+        self._connection.rollback()
+
+    def close(self) -> None:
+        self._connection.close()
+
+    @staticmethod
+    def _prepare_query(query: str) -> str:
+        return query.replace("?", "%s")
+
+    @staticmethod
+    def _should_return_insert_id(query: str) -> bool:
+        normalized = query.lstrip().upper()
+        return normalized.startswith("INSERT INTO") and " RETURNING " not in normalized
+
+
+DatabaseError = psycopg.Error
+
+
+def get_db() -> PostgresConnection:
     if "db" not in g:
-        connection = sqlite3.connect(DB_PATH)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        g.db = connection
+        g.db = PostgresConnection()
     return g.db
 
 
@@ -1320,15 +1417,14 @@ def close_db(_: BaseException | None) -> None:
 
 
 def init_db() -> None:
-    connection = sqlite3.connect(DB_PATH)
-    connection.execute("PRAGMA foreign_keys = ON")
+    connection = PostgresConnection()
     services_seed, prices_seed = load_catalog_data()
     about_seed = load_about_data()
 
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             name TEXT NOT NULL,
             surname TEXT NOT NULL,
             phone TEXT NOT NULL,
@@ -1339,7 +1435,7 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS doctors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             name TEXT NOT NULL,
             surname TEXT NOT NULL,
             phone TEXT NOT NULL,
@@ -1353,7 +1449,7 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS doctor_availability (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             doctor_id INTEGER NOT NULL,
             available_date TEXT NOT NULL,
             available_time TEXT NOT NULL,
@@ -1363,7 +1459,7 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             user_id INTEGER,
             doctor_id INTEGER,
             name TEXT NOT NULL,
@@ -1381,7 +1477,7 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             service_name TEXT NOT NULL,
             description TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -1389,16 +1485,16 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS prices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             title TEXT NOT NULL,
             service_name TEXT NOT NULL,
-            price REAL NOT NULL,
+            price DOUBLE PRECISION NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS contact_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             sender_role TEXT NOT NULL DEFAULT 'guest',
             user_id INTEGER,
             doctor_id INTEGER,
@@ -1411,7 +1507,7 @@ def init_db() -> None:
         );
 
         CREATE TABLE IF NOT EXISTS par_mums (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
             entry_type TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL DEFAULT '',
@@ -1428,17 +1524,32 @@ def init_db() -> None:
         """
     )
 
-    appointment_columns = {
-        row[1]
-        for row in connection.execute("PRAGMA table_info(appointments)").fetchall()
-    }
+    def table_exists(table_name: str) -> bool:
+        return connection.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = ?
+            """,
+            (table_name,),
+        ).fetchone() is not None
+
+    def table_columns(table_name: str) -> set[str]:
+        rows = connection.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = ?
+            """,
+            (table_name,),
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    appointment_columns = table_columns("appointments")
     if "doctor_id" not in appointment_columns:
         connection.execute("ALTER TABLE appointments ADD COLUMN doctor_id INTEGER")
 
-    doctor_columns = {
-        row[1]
-        for row in connection.execute("PRAGMA table_info(doctors)").fetchall()
-    }
+    doctor_columns = table_columns("doctors")
     if "approval_status" not in doctor_columns:
         connection.execute(
             "ALTER TABLE doctors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'"
@@ -1472,14 +1583,7 @@ def init_db() -> None:
         (now_iso(),),
     )
 
-    legacy_about_table = connection.execute(
-        """
-        SELECT name
-        FROM sqlite_master
-        WHERE type = 'table' AND name = 'about_content'
-        """
-    ).fetchone()
-    if legacy_about_table is not None:
+    if table_exists("about_content"):
         legacy_about_rows = connection.execute(
             """
             SELECT entry_type, title, content, content_format, image_path, image_alt, sort_order, created_at, updated_at
@@ -1573,7 +1677,7 @@ def init_db() -> None:
     connection.close()
 
 
-def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+def row_to_dict(row: DbRow) -> dict[str, Any]:
     return {key: row[key] for key in row.keys()}
 
 
@@ -2405,7 +2509,7 @@ def api_create_appointment(account: dict[str, Any]) -> Any:
     timestamp = now_iso()
     db = get_db()
     try:
-        db.execute("BEGIN IMMEDIATE")
+        db.execute("BEGIN")
 
         doctor = validate_appointment_doctor(raw_doctor_id, procedura)
         if doctor is None:
@@ -2454,7 +2558,7 @@ def api_create_appointment(account: dict[str, Any]) -> Any:
             ),
         )
         db.commit()
-    except sqlite3.Error:
+    except DatabaseError:
         db.rollback()
         raise
 
@@ -3144,7 +3248,7 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
         return jsonify({"error": "Appointment not found"}), 404
 
     try:
-        db.execute("BEGIN IMMEDIATE")
+        db.execute("BEGIN")
 
         owner_role = "user"
         owner_id = appointment["user_id"]
@@ -3205,7 +3309,7 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
             ),
         )
         db.commit()
-    except sqlite3.Error:
+    except DatabaseError:
         db.rollback()
         raise
 
@@ -3238,4 +3342,5 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1")
