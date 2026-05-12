@@ -76,6 +76,62 @@ FALLBACK_PRICES = [
     ("Vakcinācija pret gripu:", "Vakcinācija", 22.50),
 ]
 
+ADDITIONAL_FALLBACK_PRICES = [
+    ("Plaušu CT izmeklējums:", "Datortomogrāfija", 110.00),
+    ("Galvas, deguna blakusdobumu vai muskuloskeletālās sistēmas CT izmeklējums ar i/v kontrastēšanu:", "Datortomogrāfija", 125.00),
+    ("CT izmeklējums krūšu kurvja orgāniem ar i/v kontrastēšanu:", "Datortomogrāfija", 175.00),
+    ("CT izmeklējums vēdera dobumam un retroperitoneālai telpai ar i/v kontrastēšanu:", "Datortomogrāfija", 200.00),
+    ("CT angiogrāfija nieru artērijām:", "Datortomogrāfija", 180.00),
+    ("CT angiogrāfija vēdera aortai un kāju asinsvadiem:", "Datortomogrāfija", 180.00),
+    ("CT angiogrāfija vēdera aortai un tās zariem:", "Datortomogrāfija", 180.00),
+    ("CT angiogrāfija aortas lokam un roku asinsvadiem:", "Datortomogrāfija", 180.00),
+    ("CT angiogrāfija brahiocefālajiem asinsvadiem:", "Datortomogrāfija", 180.00),
+    ("CT angiogrāfija krūšu un vēdera aortai:", "Datortomogrāfija", 180.00),
+    ("CT sirdij, sirds asinsvadiem vai krūšu kurvja aortai sirdsdarbības kontroles režīmā:", "Datortomogrāfija", 200.00),
+    ("Kontrastviela 50 ml CT izmeklējumiem (Ultravist, Iopamiro, Iohexolo):", "Datortomogrāfija", 37.00),
+    ("Kontrastviela 100 ml CT izmeklējumiem (Ultravist, Iopamiro, Iohexolo):", "Datortomogrāfija", 40.00),
+    ("CT kaulu traumas vai lūzuma kontrolei (bez apraksta):", "Datortomogrāfija", 38.00),
+    ("CT vienai ķermeņa daļai bez kontrastēšanas (bez apraksta):", "Datortomogrāfija", 75.00),
+    ("CT vēdera dobumam un mazajam iegurnim bez kontrastēšanas:", "Datortomogrāfija", 110.00),
+    ("Vakcinācija pret pneimokoku:", "Vakcinācija", 100.50),
+    ("Vakcinācija pret ērču encefalītu (TICOVAC):", "Vakcinācija", 40.50),
+    ("Vakcinācija pret ērču encefalītu bērniem (TICOVAC):", "Vakcinācija", 34.50),
+    ("Vakcinācija pret vīrushepatītu A (HAVRIX):", "Vakcinācija", 60.50),
+    ("Vakcinācija pret vīrushepatītu B (ENGERIX):", "Vakcinācija", 45.50),
+    ("Vakcinācija pret vīrushepatītu A un B (TWINRIX):", "Vakcinācija", 90.50),
+    ("Vakcinācija pret dzelteno drudzi (STAMARIL):", "Vakcinācija", 70.50),
+    ("Vakcinācija pret vēdertīfu (Typhim Vi):", "Vakcinācija", 55.50),
+    ("Vakcinācija pret masalām, masaliņām un parotītu M-M-RVAXPro:", "Vakcinācija", 30.50),
+    ("Dzeltenā drudža sertifikāts:", "Vakcinācija", 3.50),
+    ("Vakcinācija pret trakumsērgu (VERORAB):", "Vakcinācija", 66.50),
+    ("Vakcinācija pret difteriju, stinguma krampjiem un garo klepu (ADACEL):", "Vakcinācija", 47.50),
+    ("Vakcinācija pret vīrushepatītu A (AVAXIM):", "Vakcinācija", 60.50),
+    ("Vakcinācija pret difteriju, stinguma krampjiem, poliomielītu (DULTAVAX):", "Vakcinācija", 30.50),
+    ("Piesūkušās ērces noņemšana un koduma vietas apstrāde:", "Vakcinācija", 10.00),
+    ("Dzeltenā drudža sertifikāta dublikāta izsniegšana:", "Vakcinācija", 10.00),
+    ("Vakcīna pret dzemdes kakla vēzi Gardasil 9:", "Vakcinācija", 190.50),
+    ("Vakcinācija pret meningokoku (Nimenrix):", "Vakcinācija", 80.50),
+    ("Vakcinācija pret holēru (DUKORAL):", "Vakcinācija", 60.50),
+    ("Apmeklējums mājās:", "Ģimenes ārsts", 10.00),
+]
+
+def fallback_price_service_name(service_name: str) -> str:
+    normalized_name = unicodedata.normalize("NFKD", service_name)
+    normalized_name = normalized_name.encode("ascii", "ignore").decode("ascii").lower()
+    if "tomograf" in normalized_name or "ct" in normalized_name:
+        return FALLBACK_PRICES[0][1]
+    if "vakcin" in normalized_name:
+        return FALLBACK_PRICES[2][1]
+    if "gimen" in normalized_name or "imenes" in normalized_name or "arst" in normalized_name:
+        return FALLBACK_PRICES[1][1]
+    return service_name
+
+
+DEFAULT_PRICES = FALLBACK_PRICES + [
+    (title, fallback_price_service_name(service_name), price)
+    for title, service_name, price in ADDITIONAL_FALLBACK_PRICES
+]
+
 FALLBACK_ABOUT_PAGE_TITLE = "Par mums"
 FALLBACK_ABOUT_CONTENT = [
     {
@@ -1183,7 +1239,7 @@ def resolve_service_description(service_name: str, stored_description: str) -> s
 def load_catalog_data() -> tuple[list[tuple[str, str]], list[tuple[str, str, float]]]:
     cenas_path = BASE_DIR / "cenas.html"
     if not cenas_path.exists():
-        return FALLBACK_SERVICES, FALLBACK_PRICES
+        return FALLBACK_SERVICES, DEFAULT_PRICES
 
     text = cenas_path.read_text(encoding="utf-8")
     sections = re.findall(
@@ -1218,7 +1274,7 @@ def load_catalog_data() -> tuple[list[tuple[str, str]], list[tuple[str, str, flo
             prices.append((title, service_name, float(numeric_price)))
 
     if not services or not prices:
-        return FALLBACK_SERVICES, FALLBACK_PRICES
+        return FALLBACK_SERVICES, DEFAULT_PRICES
 
     return services, prices
 
@@ -1661,6 +1717,28 @@ def init_db() -> None:
                 for title, service_name, price in prices_seed
             ],
         )
+    else:
+        existing_prices = {
+            (row["title"], row["service_name"])
+            for row in connection.execute("SELECT title, service_name FROM prices").fetchall()
+        }
+        missing_prices = [
+            (title, service_name, price)
+            for title, service_name, price in prices_seed
+            if (title, service_name) not in existing_prices
+        ]
+        if missing_prices:
+            timestamp = now_iso()
+            connection.executemany(
+                """
+                INSERT INTO prices (title, service_name, price, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (title, service_name, price, timestamp, timestamp)
+                    for title, service_name, price in missing_prices
+                ],
+            )
 
     about_rows = connection.execute(
         "SELECT entry_type, title, content FROM par_mums ORDER BY sort_order ASC, id ASC"
