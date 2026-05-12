@@ -11,6 +11,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
+from urllib.parse import unquote, urlsplit, urlunsplit
 from urllib import request as urllib_request
 
 from flask import (
@@ -25,6 +26,8 @@ from flask import (
     g,
 )
 import psycopg
+from psycopg import sql
+from psycopg.errors import InvalidCatalogName
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -1354,7 +1357,35 @@ class PostgresConnection:
                 "DATABASE_URL is not configured. Add a PostgreSQL database in Coolify "
                 "and pass its connection string as DATABASE_URL."
             )
-        self._connection = psycopg.connect(DATABASE_URL, autocommit=True)
+        self._connection = self._connect()
+
+    @staticmethod
+    def _connect():
+        try:
+            return psycopg.connect(DATABASE_URL, autocommit=True)
+        except InvalidCatalogName:
+            PostgresConnection._create_database()
+            return psycopg.connect(DATABASE_URL, autocommit=True)
+
+    @staticmethod
+    def _create_database() -> None:
+        parsed_url = urlsplit(DATABASE_URL)
+        database_name = unquote(parsed_url.path.lstrip("/"))
+        if not database_name:
+            raise
+
+        maintenance_db = "template1" if database_name == "postgres" else "postgres"
+        maintenance_url = urlunsplit(
+            (
+                parsed_url.scheme,
+                parsed_url.netloc,
+                f"/{maintenance_db}",
+                parsed_url.query,
+                parsed_url.fragment,
+            )
+        )
+        with psycopg.connect(maintenance_url, autocommit=True) as connection:
+            connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
 
     def execute(self, query: str, params: tuple[Any, ...] | list[Any] = ()) -> PostgresCursor:
         sql = self._prepare_query(query)
