@@ -6,7 +6,7 @@ import os
 import re
 import unicodedata
 import calendar
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -1490,6 +1490,320 @@ class PostgresConnection:
 DatabaseError = psycopg.Error
 
 
+DEMO_PASSWORD = "Demo12345"
+DEMO_EMAIL_DOMAIN = "demo.healthandcare.lv"
+
+DEMO_USERS = [
+    ("Anna", "Ozola", "+371 20110001", f"anna.ozola@{DEMO_EMAIL_DOMAIN}"),
+    ("Martins", "Kalnins", "+371 20110002", f"martins.kalnins@{DEMO_EMAIL_DOMAIN}"),
+    ("Laura", "Berzina", "+371 20110003", f"laura.berzina@{DEMO_EMAIL_DOMAIN}"),
+    ("Edgars", "Liepa", "+371 20110004", f"edgars.liepa@{DEMO_EMAIL_DOMAIN}"),
+    ("Ieva", "Jansone", "+371 20110005", f"ieva.jansone@{DEMO_EMAIL_DOMAIN}"),
+    ("Kristaps", "Balodis", "+371 20110006", f"kristaps.balodis@{DEMO_EMAIL_DOMAIN}"),
+    ("Sintija", "Petrova", "+371 20110007", f"sintija.petrova@{DEMO_EMAIL_DOMAIN}"),
+    ("Rihards", "Lacis", "+371 20110008", f"rihards.lacis@{DEMO_EMAIL_DOMAIN}"),
+    ("Elina", "Eglite", "+371 20110009", f"elina.eglite@{DEMO_EMAIL_DOMAIN}"),
+    ("Niks", "Abolins", "+371 20110010", f"niks.abolins@{DEMO_EMAIL_DOMAIN}"),
+]
+
+DEMO_DOCTORS = [
+    ("Ilze", "Karklina", "+371 20220001", f"ilze.karklina@{DEMO_EMAIL_DOMAIN}", "gimenesArsts"),
+    ("Andris", "Vitols", "+371 20220002", f"andris.vitols@{DEMO_EMAIL_DOMAIN}", "gimenesArsts"),
+    ("Maija", "Silina", "+371 20220003", f"maija.silina@{DEMO_EMAIL_DOMAIN}", "gimenesArsts"),
+    ("Roberts", "Zarins", "+371 20220004", f"roberts.zarins@{DEMO_EMAIL_DOMAIN}", "gimenesArsts"),
+    ("Dace", "Priedite", "+371 20220005", f"dace.priedite@{DEMO_EMAIL_DOMAIN}", "gimenesArsts"),
+    ("Janis", "Liepinsh", "+371 20220006", f"janis.liepinsh@{DEMO_EMAIL_DOMAIN}", "datortomografija"),
+    ("Liene", "Riekstina", "+371 20220007", f"liene.riekstina@{DEMO_EMAIL_DOMAIN}", "datortomografija"),
+    ("Pauls", "Krumins", "+371 20220008", f"pauls.krumins@{DEMO_EMAIL_DOMAIN}", "datortomografija"),
+    ("Evija", "Saulite", "+371 20220009", f"evija.saulite@{DEMO_EMAIL_DOMAIN}", "datortomografija"),
+    ("Oskars", "Birznieks", "+371 20220010", f"oskars.birznieks@{DEMO_EMAIL_DOMAIN}", "datortomografija"),
+    ("Linda", "Melne", "+371 20220011", f"linda.melne@{DEMO_EMAIL_DOMAIN}", "vakcinacija"),
+    ("Gatis", "Sprogis", "+371 20220012", f"gatis.sprogis@{DEMO_EMAIL_DOMAIN}", "vakcinacija"),
+    ("Agnese", "Dreimane", "+371 20220013", f"agnese.dreimane@{DEMO_EMAIL_DOMAIN}", "vakcinacija"),
+    ("Renars", "Veveris", "+371 20220014", f"renars.veveris@{DEMO_EMAIL_DOMAIN}", "vakcinacija"),
+    ("Marta", "Luse", "+371 20220015", f"marta.luse@{DEMO_EMAIL_DOMAIN}", "vakcinacija"),
+]
+
+DEMO_LOCATIONS_BY_PROCEDURE = {
+    "gimenesArsts": [
+        "Riga, Brivibas iela",
+        "Jelgava, Zemgales prospekts",
+    ],
+    "datortomografija": [
+        "Riga, Lidonu iela 13",
+        "Liepaja, Rozu iela",
+    ],
+    "vakcinacija": [
+        "Riga, Brivibas iela",
+        "Jelgava, Zemgales prospekts",
+        "Liepaja, Rozu iela",
+    ],
+}
+
+
+def get_seeded_row_id(connection: PostgresConnection, table_name: str, email: str) -> int:
+    row = connection.execute(
+        f"SELECT id FROM {table_name} WHERE email = ?",
+        (email,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Demo row was not created in {table_name}: {email}")
+    return row["id"]
+
+
+def seed_demo_accounts(connection: PostgresConnection) -> tuple[dict[str, int], dict[str, int]]:
+    timestamp = now_iso()
+    password_hash = generate_password_hash(DEMO_PASSWORD)
+
+    for name, surname, phone, email in DEMO_USERS:
+        if connection.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone() is None:
+            connection.execute(
+                """
+                INSERT INTO users (name, surname, phone, email, password_hash, created_at, password_updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (name, surname, phone, email, password_hash, timestamp, timestamp),
+            )
+
+    for name, surname, phone, email, procedure in DEMO_DOCTORS:
+        existing_doctor = connection.execute(
+            "SELECT id FROM doctors WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if existing_doctor is None:
+            connection.execute(
+                """
+                INSERT INTO doctors (
+                    name, surname, phone, email, password_hash, procedure, approval_status,
+                    created_at, password_updated_at, status_updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    surname,
+                    phone,
+                    email,
+                    password_hash,
+                    procedure,
+                    DOCTOR_APPROVAL_APPROVED,
+                    timestamp,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+        else:
+            connection.execute(
+                """
+                UPDATE doctors
+                SET approval_status = ?, status_updated_at = COALESCE(NULLIF(status_updated_at, ''), ?)
+                WHERE email = ?
+                """,
+                (DOCTOR_APPROVAL_APPROVED, timestamp, email),
+            )
+
+    user_ids = {
+        email: get_seeded_row_id(connection, "users", email)
+        for _, _, _, email in DEMO_USERS
+    }
+    doctor_ids = {
+        email: get_seeded_row_id(connection, "doctors", email)
+        for _, _, _, email, _ in DEMO_DOCTORS
+    }
+    return user_ids, doctor_ids
+
+
+def demo_schedule_times(procedure: str, weekday: int, doctor_index: int) -> list[str]:
+    if weekday == 6:
+        return []
+
+    if procedure == "datortomografija":
+        base_times = ["09:00", "09:45", "10:30", "11:15", "12:00", "13:30", "14:15", "15:00"]
+        if weekday in {1, 3}:
+            base_times += ["16:00", "16:45", "17:30"]
+    elif procedure == "vakcinacija":
+        base_times = ["10:00", "10:15", "10:30", "10:45", "11:00", "11:15", "14:00", "14:15", "14:30", "14:45"]
+        if weekday in {0, 2, 4}:
+            base_times += ["16:00", "16:15", "16:30", "16:45"]
+    else:
+        base_times = ["09:00", "09:30", "10:00", "10:30", "11:00", "13:00", "13:30", "14:00", "15:00", "15:30"]
+        if weekday in {1, 3}:
+            base_times += ["17:00", "17:30", "18:00"]
+
+    if weekday == 5:
+        base_times = [slot for slot in base_times if "10:00" <= slot <= "17:30"]
+
+    if doctor_index % 2:
+        return base_times[1:]
+    return base_times[:-1]
+
+
+def seed_demo_doctor_availability(
+    connection: PostgresConnection,
+    doctor_ids: dict[str, int],
+) -> None:
+    timestamp = now_iso()
+    today = date.today()
+    rows: list[tuple[int, str, str, str, str]] = []
+
+    for doctor_index, (_, _, _, email, procedure) in enumerate(DEMO_DOCTORS):
+        doctor_id = doctor_ids[email]
+        for day_offset in range(0, 31):
+            target_date = today + timedelta(days=day_offset)
+            for available_time in demo_schedule_times(procedure, target_date.weekday(), doctor_index):
+                rows.append((doctor_id, target_date.isoformat(), available_time, timestamp, timestamp))
+
+    if rows:
+        connection.executemany(
+            """
+            INSERT INTO doctor_availability (doctor_id, available_date, available_time, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (doctor_id, available_date, available_time)
+            DO UPDATE SET updated_at = EXCLUDED.updated_at
+            """,
+            rows,
+        )
+
+
+def find_demo_slot(
+    connection: PostgresConnection,
+    doctor_id: int,
+    day_offset: int,
+    preferred_index: int,
+) -> tuple[str, str]:
+    for extra_days in range(0, 31):
+        target_date = date.today() + timedelta(days=day_offset + extra_days)
+        rows = connection.execute(
+            """
+            SELECT available_time
+            FROM doctor_availability
+            WHERE doctor_id = ? AND available_date = ?
+            ORDER BY available_time ASC
+            """,
+            (doctor_id, target_date.isoformat()),
+        ).fetchall()
+        free_times = [
+            row["available_time"]
+            for row in rows
+            if connection.execute(
+                """
+                SELECT id
+                FROM appointments
+                WHERE doctor_id = ? AND datums = ? AND laiks = ?
+                """,
+                (doctor_id, target_date.isoformat(), row["available_time"]),
+            ).fetchone() is None
+        ]
+        if free_times:
+            return target_date.isoformat(), free_times[preferred_index % len(free_times)]
+
+    raise RuntimeError(f"No demo availability found for doctor {doctor_id}")
+
+
+def seed_demo_appointments(
+    connection: PostgresConnection,
+    user_ids: dict[str, int],
+    doctor_ids: dict[str, int],
+) -> None:
+    timestamp = now_iso()
+    plans = [
+        (0, 0, 0, 1, "Profilaktiska apskate un asinsspiediena kontrole."),
+        (0, 1, 5, 3, "Datortomografija ar kontrastvielu."),
+        (0, 2, 10, 5, "Papildu vakcinacijas konsultacija."),
+        (1, 3, 1, 2, "Gimenes arsta konsultacija par muguras sapem."),
+        (1, 4, 6, 4, "CT izmeklejums pec arsta nosutijuma."),
+        (1, 5, 11, 6, "Vakcinacija pret hepatitu A."),
+        (2, 6, 2, 3, "Konsultacija par hronisku nogurumu."),
+        (2, 7, 7, 5, "Vedera dobuma CT izmeklejums."),
+        (2, 8, 12, 7, "Gripas vakcinacija pirms brauciena."),
+        (3, 9, 3, 4, "Akuta konsultacija par saaukstesanos."),
+        (3, 10, 8, 6, "Kontroles datortomografija pec traumas."),
+        (3, 11, 13, 8, "Celojuma vakcinacijas konsultacija."),
+        (4, 12, 4, 5, "Gimenes arsta nosutijuma apspriesana."),
+        (4, 13, 9, 7, "Galvas CT izmeklejums."),
+        (4, 14, 14, 9, "Erchu encefalita revakcinacija."),
+        (5, 15, 0, 6, "Profilaktiska veselibas parbaude."),
+        (5, 16, 5, 8, "Plausu CT izmeklejums."),
+        (5, 17, 10, 10, "Difterijas un stingumkrampju vakcina."),
+        (6, 18, 1, 7, "Gimenes arsta konsultacija par analizem."),
+        (6, 19, 6, 9, "Mugurkaula datortomografija."),
+        (6, 20, 11, 11, "Vakcinacijas kalendara papildinasana."),
+        (7, 21, 2, 8, "Konsultacija par terapijas turpinajumu."),
+        (7, 22, 7, 10, "Krusu kurvja CT izmeklejums."),
+        (7, 23, 12, 12, "Pneimokoku vakcina."),
+        (8, 24, 3, 9, "Gimenes arsta vizite pec saslimsanas."),
+        (8, 25, 8, 11, "CT kontrole pec operacijas."),
+        (8, 26, 13, 13, "Gripas vakcinacija."),
+        (9, 27, 4, 10, "Profilaktiska konsultacija un analizu rezultati."),
+        (9, 28, 9, 12, "Datortomografija deguna blakusdobumiem."),
+        (9, 29, 14, 14, "Revakcinacija pec iepriekseja pieraksta."),
+    ]
+
+    for user_index, doctor_index, doctor_list_index, day_offset, comment in plans:
+        user = DEMO_USERS[user_index]
+        doctor = DEMO_DOCTORS[doctor_list_index]
+        user_id = user_ids[user[3]]
+        doctor_id = doctor_ids[doctor[3]]
+        procedure = doctor[4]
+        existing_active = connection.execute(
+            """
+            SELECT id
+            FROM appointments
+            WHERE user_id = ? AND procedura = ? AND datums >= ?
+            ORDER BY datums ASC, laiks ASC
+            LIMIT 1
+            """,
+            (user_id, procedure, date.today().isoformat()),
+        ).fetchone()
+        if existing_active is not None:
+            continue
+
+        datums, laiks = find_demo_slot(connection, doctor_id, day_offset, doctor_index)
+        location_options = DEMO_LOCATIONS_BY_PROCEDURE[procedure]
+        adrese = location_options[(user_index + doctor_index) % len(location_options)]
+
+        if connection.execute(
+            """
+            SELECT id
+            FROM appointments
+            WHERE user_id = ? AND doctor_id = ? AND datums = ? AND laiks = ?
+            """,
+            (user_id, doctor_id, datums, laiks),
+        ).fetchone() is not None:
+            continue
+
+        connection.execute(
+            """
+            INSERT INTO appointments (
+                user_id, doctor_id, name, surname, phone, email, procedura, datums,
+                laiks, adrese, comment, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                doctor_id,
+                user[0],
+                user[1],
+                user[2],
+                user[3],
+                procedure,
+                datums,
+                laiks,
+                adrese,
+                comment,
+                timestamp,
+                timestamp,
+            ),
+        )
+
+
+def seed_demo_data(connection: PostgresConnection) -> None:
+    user_ids, doctor_ids = seed_demo_accounts(connection)
+    seed_demo_doctor_availability(connection, doctor_ids)
+    seed_demo_appointments(connection, user_ids, doctor_ids)
+
+
 def get_db() -> PostgresConnection:
     if "db" not in g:
         g.db = PostgresConnection()
@@ -1781,6 +2095,8 @@ def init_db() -> None:
                 for item in about_seed
             ],
         )
+
+    seed_demo_data(connection)
 
     connection.commit()
     connection.close()
