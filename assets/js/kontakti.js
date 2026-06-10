@@ -1,3 +1,4 @@
+// Kontaktu formas skripts: automātiska datu aizpilde un ziņojuma nosūtīšana.
 const contactForm = document.getElementById("contactForm");
 const contactNameInput = document.getElementById("vards");
 const contactEmailInput = document.getElementById("epasts");
@@ -8,6 +9,7 @@ const contactStatus = document.getElementById("contactMessageStatus");
 let contactAccount = null;
 
 function setContactStatus(message, type) {
+    // Parāda lietotājam kontaktformas nosūtīšanas statusu.
     if (!contactStatus) {
         return;
     }
@@ -25,6 +27,7 @@ function setContactStatus(message, type) {
 }
 
 function applyContactAccountPrefill() {
+    // Ja lietotājs ir ielogojies, aizpilda vārdu un e-pastu automātiski.
     if (!contactNameInput || !contactEmailInput) {
         return;
     }
@@ -57,6 +60,7 @@ function applyContactAccountPrefill() {
 }
 
 async function loadContactAccount() {
+    // Mēģina ielādēt pašreizējo kontu kontaktformas vajadzībām.
     try {
         const response = await fetch("/api/me", {
             headers: {
@@ -79,6 +83,7 @@ async function loadContactAccount() {
 }
 
 async function submitContactForm(event) {
+    // Nosūta kontaktformas ziņojumu uz backend API.
     event.preventDefault();
     setContactStatus("", "");
 

@@ -1,10 +1,13 @@
+// "Par mums" lapas skripts: ielādē administrējamu saturu no API.
 function safeAboutHtml(value) {
+    // Dinamisko tekstu pārvērš drošā HTML tekstā.
     const div = document.createElement("div");
     div.textContent = value ?? "";
     return div.innerHTML;
 }
 
 function renderAboutContentBlock(section) {
+    // Atkarībā no satura formāta izveido rindkopu vai sarakstu.
     const content = String(section.content || "").trim();
     const format = section.content_format || "paragraph";
 
@@ -25,6 +28,7 @@ function renderAboutContentBlock(section) {
 }
 
 async function loadAboutPage() {
+    // Ielādē lapas virsrakstu un sadaļas no backend API.
     const titleElement = document.getElementById("aboutPageTitle");
     const sectionsContainer = document.getElementById("aboutSections");
     if (!titleElement || !sectionsContainer) {

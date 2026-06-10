@@ -1,10 +1,13 @@
+// Pakalpojumu kartīšu skripts: ielādē pakalpojumus no API un attēlo tos lapā.
 function safeText(value) {
+    // Dinamisko tekstu pārvērš drošā HTML tekstā.
     const div = document.createElement("div");
     div.textContent = value ?? "";
     return div.innerHTML;
 }
 
 function resolveCardAction(service, container) {
+    // Nosaka, vai kartītes poga ved uz detalizētu lapu vai pieraksta formu.
     const mode = container.dataset.cardMode || "details";
     const meta = service.public_meta || {};
 
@@ -22,6 +25,7 @@ function resolveCardAction(service, container) {
 }
 
 async function loadServices() {
+    // Ielādē pakalpojumu katalogu un izveido kartītes.
     const container = document.getElementById("serviceCards");
     if (!container) {
         return;

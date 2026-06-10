@@ -1,3 +1,4 @@
+// Lietotāja/ārsta kabineta skripts: profils, parole, pieraksti un lomu atšķirīgie skati.
 const PROCEDURE_LABELS = {
     datortomografija: "Datortomogrāfija",
     gimenesArsts: "Ģimenes ārsts",
@@ -16,6 +17,7 @@ const cabinetState = {
 };
 
 function escapeHtml(value) {
+    // Aizsargā dinamisko HTML pret nevēlamu ievadi.
     return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -34,6 +36,7 @@ async function readJsonResponse(response) {
 }
 
 async function fetchCurrentUser() {
+    // Ielādē pašreizējo kabinetā ielogoto kontu.
     const response = await fetch("/api/me");
     if (response.status === 401) {
         throw new Error("AUTH_REQUIRED");
@@ -48,6 +51,7 @@ async function fetchCurrentUser() {
 }
 
 async function fetchMyAppointments() {
+    // Ielādē pacienta pierakstus vai ārsta pacientu pierakstus.
     const response = await fetch("/api/my-appointments");
     if (response.status === 401) {
         throw new Error("AUTH_REQUIRED");
@@ -62,6 +66,7 @@ async function fetchMyAppointments() {
 }
 
 async function cancelMyAppointment(appointmentId) {
+    // Pacients var atcelt tikai savus pierakstus.
     const response = await fetch(`/api/my-appointments/${appointmentId}`, {
         method: "DELETE"
     });
@@ -152,6 +157,7 @@ function clearPanelMessage(elementId) {
 }
 
 function setCabinetRolePresentation(user) {
+    // Pielāgo kabineta tekstus un pogas pēc konta lomas.
     const badge = document.getElementById("cabinetRoleBadge");
     if (badge) {
         badge.innerHTML = user.role === "doctor"
@@ -223,6 +229,7 @@ function setCabinetRolePresentation(user) {
 }
 
 function fillProfileForm(user) {
+    // Aizpilda profila labošanas formu ar pašreizējiem konta datiem.
     document.getElementById("profileName").value = user.name || "";
     document.getElementById("profileSurname").value = user.surname || "";
     document.getElementById("profilePhone").value = user.phone || "";
@@ -235,6 +242,7 @@ function fillProfileForm(user) {
 }
 
 function renderUserSummary(user) {
+    // Attēlo kabineta augšējo kopsavilkumu ar lietotāja pamatdatiem.
     cabinetState.user = user;
     setCabinetRolePresentation(user);
 
@@ -258,6 +266,7 @@ function renderUserSummary(user) {
 }
 
 function renderAppointments(appointments) {
+    // Attēlo pierakstu kartītes; pacientam un ārstam tās satur atšķirīgu informāciju.
     cabinetState.appointments = appointments;
     document.getElementById("summaryAppointmentCount").textContent = String(appointments.length);
 
@@ -374,6 +383,7 @@ function renderAppointments(appointments) {
 }
 
 function setActivePanel(sectionId) {
+    // Pārslēdz redzamo kabineta sadaļu.
     document.querySelectorAll(".cabinet-panel").forEach((panel) => {
         panel.classList.toggle("active", panel.id === sectionId && !panel.hidden);
     });
@@ -406,6 +416,7 @@ function toggleSettingsDropdown() {
 }
 
 function setupSettingsNavigation() {
+    // Sagatavo iestatījumu izvēlni un sadaļu pārslēgšanu.
     const toggle = document.getElementById("settingsToggle");
     if (toggle) {
         toggle.addEventListener("click", toggleSettingsDropdown);
@@ -431,16 +442,19 @@ function setupSettingsNavigation() {
 }
 
 async function reloadUserData() {
+    // Pārlādē profila datus pēc izmaiņu saglabāšanas.
     const user = await fetchCurrentUser();
     renderUserSummary(user);
 }
 
 async function reloadAppointments() {
+    // Pārlādē pierakstu sarakstu pēc atcelšanas vai izmaiņām.
     const appointments = await fetchMyAppointments();
     renderAppointments(appointments);
 }
 
 async function handleAppointmentsClick(event) {
+    // Apstrādā klikšķus pierakstu sarakstā, piemēram, atcelšanas pogu.
     const cancelButton = event.target.closest(".cancel-appointment-action");
     if (!cancelButton) {
         return;
@@ -481,6 +495,7 @@ async function handleAppointmentsClick(event) {
 }
 
 async function updateProfile(event) {
+    // Nosūta profila izmaiņas uz backend API.
     event.preventDefault();
     clearPanelMessage("profileMessage");
 
@@ -538,6 +553,7 @@ async function updateProfile(event) {
 }
 
 async function updatePassword(event) {
+    // Nosūta paroles maiņas pieprasījumu.
     event.preventDefault();
     clearPanelMessage("passwordMessage");
 
@@ -587,6 +603,7 @@ async function updatePassword(event) {
 }
 
 async function initializeCabinet() {
+    // Inicializē kabinetu, ielādējot lietotāju un pierakstus.
     try {
         const user = await fetchCurrentUser();
         renderUserSummary(user);

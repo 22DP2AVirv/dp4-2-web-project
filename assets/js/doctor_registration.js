@@ -1,6 +1,8 @@
+// Ārsta reģistrācijas forma; pēc reģistrācijas konts gaida admin apstiprinājumu.
 const doctorRegistrationForm = document.getElementById("doctorRegistrationForm");
 
 async function submitDoctorRegistration(event) {
+    // Nosūta ārsta konta pieteikumu backend API.
     event.preventDefault();
 
     const name = document.getElementById("name").value.trim();

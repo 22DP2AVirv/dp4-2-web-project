@@ -1,3 +1,4 @@
+// Ārsta grafika plānotājs: kalendārs, dienas laiki un saglabāšana backend API.
 const scheduleState = {
     user: null,
     today: null,
@@ -97,6 +98,7 @@ function formatLongDate(value) {
 }
 
 function getWorkingHoursForDate(date) {
+    // Atgriež klīnikas darba laiku konkrētajai dienai.
     const weekday = date.getDay();
     if (weekday >= 1 && weekday <= 5) {
         return {
@@ -118,6 +120,7 @@ function getWorkingHoursForDate(date) {
 }
 
 function buildTimeSlotsForDate(date) {
+    // Izveido visus 15 minūšu laika slotus, kurus ārsts var atzīmēt kā pieejamus.
     const workingHours = getWorkingHoursForDate(date);
     if (!workingHours) {
         return [];
@@ -191,6 +194,7 @@ function getDefaultDateForMonth(month) {
 }
 
 async function fetchCurrentUser() {
+    // Pārbauda, vai lapu atver apstiprināts ārsta konts.
     const response = await fetch("/api/me");
     if (response.status === 401) {
         throw new Error("AUTH_REQUIRED");
@@ -205,6 +209,7 @@ async function fetchCurrentUser() {
 }
 
 async function fetchMonthSummary(monthKey) {
+    // Ielādē kalendāra mēneša kopsavilkumu ar brīvajiem un aizņemtajiem laikiem.
     const response = await fetch(`/api/doctor/schedule?month=${encodeURIComponent(monthKey)}`);
     if (response.status === 401) {
         throw new Error("AUTH_REQUIRED");
@@ -222,6 +227,7 @@ async function fetchMonthSummary(monthKey) {
 }
 
 async function fetchDaySchedule(dateValue) {
+    // Ielādē konkrētas dienas ārsta grafiku.
     const response = await fetch(`/api/doctor/schedule?date=${encodeURIComponent(dateValue)}`);
     if (response.status === 401) {
         throw new Error("AUTH_REQUIRED");
@@ -239,6 +245,7 @@ async function fetchDaySchedule(dateValue) {
 }
 
 async function saveDaySchedule(dateValue, availableTimes) {
+    // Saglabā ārsta izvēlētos pieejamos laikus datubāzē.
     const response = await fetch("/api/doctor/schedule", {
         method: "PUT",
         headers: {
@@ -297,6 +304,7 @@ function updateMonthNavigation() {
 }
 
 function renderCalendar() {
+    // Uzzīmē mēneša kalendāru un parāda, kurās dienās ir brīvi vai aizņemti laiki.
     const calendarGrid = document.getElementById("calendarGrid");
     if (!calendarGrid || !scheduleState.currentMonth) {
         return;
@@ -365,6 +373,7 @@ function renderCalendar() {
 }
 
 function renderPlanner() {
+    // Uzzīmē izvēlētās dienas laika slotus ar brīvajiem un aizņemtajiem laikiem.
     const dateTitle = document.getElementById("plannerDateTitle");
     const dateSubtitle = document.getElementById("plannerDateSubtitle");
     const note = document.getElementById("plannerNote");
@@ -518,6 +527,7 @@ function renderPlanner() {
 }
 
 async function loadMonthSummary() {
+    // Pārlādē mēneša datus pēc grafika izmaiņām.
     const requestId = ++scheduleState.monthRequestId;
     const payload = await fetchMonthSummary(getMonthKey(scheduleState.currentMonth));
     if (requestId !== scheduleState.monthRequestId) {
@@ -529,6 +539,7 @@ async function loadMonthSummary() {
 }
 
 async function loadDayScheduleView(dateValue) {
+    // Pārlādē vienas dienas grafiku un atjauno plānotāja skatu.
     scheduleState.selectedDate = dateValue;
     scheduleState.loadingDay = true;
     scheduleState.daySchedule = null;
@@ -579,6 +590,7 @@ async function changeMonth(offset) {
 }
 
 async function saveCurrentDaySchedule() {
+    // Saglabā pašreizējā dienā atzīmētos laikus.
     if (!scheduleState.selectedDate || scheduleState.saving) {
         return;
     }
@@ -614,6 +626,7 @@ async function saveCurrentDaySchedule() {
 }
 
 function handleCalendarClick(event) {
+    // Apstrādā klikšķi uz kalendāra dienas.
     const dayButton = event.target.closest("[data-date]");
     if (!dayButton || dayButton.disabled) {
         return;
@@ -633,6 +646,7 @@ function handleCalendarClick(event) {
 }
 
 function handleTimeSlotClick(event) {
+    // Pārslēdz vienu laika slotu starp pieejamu un nepieejamu.
     const slotButton = event.target.closest("[data-time]");
     if (!slotButton || slotButton.disabled) {
         return;
@@ -653,6 +667,7 @@ function handleTimeSlotClick(event) {
 }
 
 function selectAllSlots() {
+    // Atzīmē visus dienas slotus kā pieejamus, izņemot jau rezervētos.
     const selectedDate = parseDateValue(scheduleState.selectedDate);
     if (!selectedDate) {
         return;
@@ -666,11 +681,13 @@ function selectAllSlots() {
 }
 
 function clearOpenSlots() {
+    // Noņem ārsta brīvos slotus, bet saglabā jau rezervētos laikus.
     scheduleState.pendingTimes = new Set();
     renderPlanner();
 }
 
 async function initializeDoctorSchedule() {
+    // Inicializē ārsta grafika lapu un ielādē sākotnējo mēnesi.
     scheduleState.today = startOfDay(new Date());
     scheduleState.maxDate = getMaxPlanningDate(scheduleState.today);
 

@@ -1,3 +1,4 @@
+// Pieraksta formas skripts: ārstu, datumu un brīvo laiku dinamiska ielāde.
 const appointmentForm = document.getElementById("appointmentForm");
 const appointmentLoginRequiredMessage = window.APPOINTMENT_LOGIN_REQUIRED_MESSAGE
     || "Lai pieteiktos uz procedūru, Jums ir jābūt reģistrētam lietotājam!";
@@ -71,6 +72,7 @@ function setTimeSelectPlaceholder(message, disabled = true) {
 }
 
 async function populateDoctorOptions(procedura, selectedDoctorId = "") {
+    // Pēc izvēlētās procedūras ielādē tikai tai atbilstošos ārstus.
     const doctorSelect = document.getElementById("arstId");
     if (!doctorSelect) {
         return;
@@ -149,6 +151,7 @@ async function populateDoctorOptions(procedura, selectedDoctorId = "") {
 }
 
 async function populateDateOptions(doctorId, procedureValue, selectedDate = "") {
+    // Pēc ārsta izvēles ielādē datumus, kuros šim ārstam ir brīvi laiki.
     const dateSelect = document.getElementById("velamaisDatums");
     if (!dateSelect) {
         return;
@@ -339,6 +342,7 @@ function getWorkingHoursForDate(dateValue) {
 }
 
 function validateAppointmentDate(dateValue) {
+    // Frontend pusē pārbauda datumu, lai lietotājs kļūdu redzētu uzreiz.
     const selectedDate = parseDateInputValue(dateValue);
     if (!selectedDate) {
         return "Lūdzu izvēlieties korektu datumu.";
@@ -368,6 +372,7 @@ function validateAppointmentDate(dateValue) {
 }
 
 function validateAppointmentTime(dateValue, timeValue) {
+    // Pārbauda, vai izvēlētais laiks atbilst darba laikam un pieejamajiem slotiem.
     if (!timeValue) {
         return "Lūdzu izvēlieties laiku.";
     }
@@ -406,6 +411,7 @@ function validateAppointmentTime(dateValue, timeValue) {
 }
 
 async function populateTimeOptions(dateValue, doctorId, procedureValue, selectedValue = "") {
+    // Ielādē no servera tikai tos laikus, kas izvēlētajam ārstam vēl ir brīvi.
     const timeSelect = document.getElementById("velamaisLaiks");
     if (!timeSelect) {
         return;
@@ -500,6 +506,7 @@ async function populateTimeOptions(dateValue, doctorId, procedureValue, selected
 }
 
 async function refreshAvailableTimeOptions(selectedValue = "") {
+    // Atjauno laiku sarakstu, kad mainās ārsts, datums vai procedūra.
     const dateInput = document.getElementById("velamaisDatums");
     const doctorSelect = document.getElementById("arstId");
     const procedureInput = document.getElementById("procedura");
@@ -513,6 +520,7 @@ async function refreshAvailableTimeOptions(selectedValue = "") {
 }
 
 async function prefillCurrentUser() {
+    // Ja pacients ir ielogojies, forma automātiski aizpilda viņa kontaktinformāciju.
     try {
         const response = await fetch("/api/me");
         if (response.status === 401) {
@@ -542,6 +550,7 @@ async function prefillCurrentUser() {
 }
 
 function getAppointmentLocation(procedura) {
+    // Procedūrai piemeklē vai pieprasa piemērotu filiāli/adresi.
     const kurNotiks = document.getElementById("kurNotiks");
     const adrese = document.getElementById("adrese");
     const filiale = document.getElementById("filiale");
@@ -578,6 +587,7 @@ function getAppointmentLocation(procedura) {
 }
 
 async function submitAppointment(event) {
+    // Nosūta pierakstu uz backend API tikai pēc visu lauku pārbaudēm.
     event.preventDefault();
 
     const procedura = document.getElementById("procedura").value;

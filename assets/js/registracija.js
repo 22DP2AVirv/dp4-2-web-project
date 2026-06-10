@@ -1,6 +1,8 @@
+// Pacienta reģistrācijas forma.
 const registrationForm = document.getElementById("registrationForm");
 
 async function submitRegistration(event) {
+    // Nosūta jaunā pacienta datus uz reģistrācijas API.
     event.preventDefault();
 
     const name = document.getElementById("name").value.trim();

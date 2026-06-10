@@ -1,3 +1,4 @@
+// Header efekts: ritinot lapu, navigācijai pievieno "sticky" stāvokli.
 document.addEventListener("DOMContentLoaded", () => {
     const header = document.querySelector("header");
     if (!header) {

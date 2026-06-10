@@ -1,3 +1,4 @@
+// Admin pieteikšanās forma un kļūdu attēlošana.
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
     const loginInput = document.getElementById("login");
@@ -9,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     loginForm.addEventListener("submit", async (event) => {
+        // Nosūta admin pieteikšanās datus uz backend API.
         event.preventDefault();
         errorMessage.style.display = "none";
 

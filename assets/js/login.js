@@ -1,12 +1,15 @@
+// Pacienta un ārsta pieteikšanās forma.
 const loginForm = document.getElementById("loginForm");
 
 function getRequestedRole() {
+    // Nosaka, vai lietotājs mēģina ielogoties kā pacients vai ārsts.
     const params = new URLSearchParams(window.location.search);
     const requestedRole = params.get("role");
     return requestedRole === "doctor" ? "doctor" : "user";
 }
 
 async function submitLogin(event) {
+    // Nosūta pieteikšanās datus un pēc veiksmīgas atbildes pārsūta uz kabinetu.
     event.preventDefault();
 
     const role = document.getElementById("role").value;

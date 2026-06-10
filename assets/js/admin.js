@@ -1,3 +1,4 @@
+// Admin paneļa galvenais skripts: lietotāji, ārsti, pakalpojumi, cenas, pieraksti un saturs.
 const PROCEDURE_LABELS = {
     datortomografija: "Datortomogrāfija",
     gimenesArsts: "Ģimenes ārsts",
@@ -27,6 +28,7 @@ const DOCTOR_STATUS_BADGE_CLASSES = {
 };
 
 function escapeHtml(value) {
+    // Aizsargā admin panelī ģenerēto HTML pret nevēlamu ievadi.
     return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -62,6 +64,7 @@ function parseProcedureValue(value) {
 }
 
 async function apiRequest(url, options = {}) {
+    // Kopīgs API pieprasījumu palīgs ar kļūdu apstrādi un JSON nolasīšanu.
     const config = {
         headers: {
             "Content-Type": "application/json",
@@ -121,6 +124,7 @@ function compareText(left, right) {
 }
 
 function sortItems(items, { mode, getTextValue, getCreatedAtValue, getUpdatedAtValue = getCreatedAtValue }) {
+    // Kārto admin paneļa sarakstus pēc izvēlētā režīma.
     const sortedItems = [...items];
 
     if (mode === "az") {
@@ -212,6 +216,7 @@ function showModalMessage(messageElement, text) {
 }
 
 function createModalState() {
+    // Vienots stāvokļa objekts Bootstrap modāļiem.
     return {
         instance: null,
         mode: "create",
@@ -245,6 +250,7 @@ function resetUserModal() {
 }
 
 async function handleUserModalSubmit(event) {
+    // Saglabā jaunu vai labotu pacienta kontu no modālā loga.
     event.preventDefault();
 
     const elements = getUserModalElements();
@@ -395,6 +401,7 @@ function resetDoctorModal() {
 }
 
 async function handleDoctorModalSubmit(event) {
+    // Saglabā jaunu vai labotu ārsta kontu no modālā loga.
     event.preventDefault();
 
     const elements = getDoctorModalElements();
@@ -538,6 +545,7 @@ function resetServiceModal() {
 }
 
 async function handleServiceModalSubmit(event) {
+    // Saglabā pakalpojuma nosaukumu un aprakstu.
     event.preventDefault();
 
     const elements = getServiceModalElements();
@@ -654,6 +662,7 @@ function getPriceModalElements() {
 }
 
 async function populatePriceServices(selectedService = "") {
+    // Cenas modālī ielādē pakalpojumu sarakstu.
     const { serviceInput } = getPriceModalElements();
     if (!serviceInput) {
         return;
@@ -706,6 +715,7 @@ function resetPriceModal() {
 }
 
 async function handlePriceModalSubmit(event) {
+    // Saglabā cenu ierakstu un pārbauda ievadīto summu.
     event.preventDefault();
 
     const elements = getPriceModalElements();
@@ -828,6 +838,7 @@ function getAppointmentModalElements() {
 }
 
 function populateAppointmentDoctors(procedure, selectedDoctorId = "") {
+    // Pieraksta labošanā rāda tikai procedūrai atbilstošos ārstus.
     const elements = getAppointmentModalElements();
     if (!elements.doctorInput) {
         return;
@@ -870,6 +881,7 @@ function resetAppointmentModal() {
 }
 
 async function handleAppointmentModalSubmit(event) {
+    // Saglabā admina labotu pierakstu.
     event.preventDefault();
 
     const elements = getAppointmentModalElements();
@@ -1064,6 +1076,7 @@ function fillAboutModal(entry) {
 }
 
 async function handleAboutModalSubmit(event) {
+    // Saglabā "Par mums" lapas satura izmaiņas.
     event.preventDefault();
 
     const elements = getAboutModalElements();
@@ -1128,6 +1141,7 @@ function openAboutModal(entry) {
 }
 
 function handleAdminError(error) {
+    // Ja admin sesija beigusies, pārsūta uz admin pieteikšanās lapu.
     if (error.message === "ADMIN_AUTH_REQUIRED") {
         window.location.href = "admin-login.html";
         return;
@@ -1250,6 +1264,7 @@ function formatContactRole(value) {
 }
 
 async function renderUsers() {
+    // Atjauno lietotāju tabulu admin panelī.
     const userList = document.getElementById("userList");
     if (!userList) {
         return;
@@ -1312,6 +1327,7 @@ function getDoctorStatusActions(doctor) {
 }
 
 async function renderDoctors() {
+    // Atjauno ārstu tabulu, ieskaitot statusa pogas.
     const doctorList = document.getElementById("doctorList");
     if (!doctorList) {
         return;
@@ -1346,6 +1362,7 @@ async function renderDoctors() {
 }
 
 async function renderServices() {
+    // Atjauno pakalpojumu sarakstu.
     const serviceList = document.getElementById("serviceList");
     if (!serviceList) {
         return;
@@ -1376,6 +1393,7 @@ async function renderServices() {
 }
 
 async function renderPrices() {
+    // Atjauno cenu sarakstu.
     const priceList = document.getElementById("priceList");
     if (!priceList) {
         return;
@@ -1409,6 +1427,7 @@ async function renderPrices() {
 }
 
 async function renderAboutContent() {
+    // Atjauno "Par mums" administrējamo saturu.
     const aboutContentList = document.getElementById("aboutContentList");
     if (!aboutContentList) {
         return;
@@ -1441,6 +1460,7 @@ async function renderAboutContent() {
 }
 
 async function renderContactMessages() {
+    // Atjauno kontaktformas ziņojumu sarakstu.
     const contactMessageList = document.getElementById("contactMessageList");
     if (!contactMessageList) {
         return;
@@ -1473,6 +1493,7 @@ async function renderContactMessages() {
 }
 
 async function renderAppointments() {
+    // Atjauno visu pierakstu sarakstu admin panelī.
     const appointmentList = document.getElementById("appointmentList");
     if (!appointmentList) {
         return;
@@ -1512,6 +1533,7 @@ async function renderAppointments() {
 }
 
 window.logout = async function logout() {
+    // Izraksta administratoru no admin paneļa.
     try {
         await apiRequest("/api/admin/logout", { method: "POST" });
     } finally {
@@ -1520,6 +1542,7 @@ window.logout = async function logout() {
 };
 
 function bindAdminLogoutLinks() {
+    // Pievieno izrakstīšanās darbību visām admin paneļa logout saitēm.
     document.querySelectorAll("[data-admin-logout]").forEach((link) => {
         link.addEventListener("click", async (event) => {
             event.preventDefault();
@@ -1529,6 +1552,7 @@ function bindAdminLogoutLinks() {
 }
 
 function bindSortControls() {
+    // Piesaista kārtošanas izvēlnes attiecīgo tabulu pārzīmēšanai.
     const renderers = {
         userSort: renderUsers,
         doctorSort: renderDoctors,

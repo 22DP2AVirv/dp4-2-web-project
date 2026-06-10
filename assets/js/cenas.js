@@ -1,4 +1,6 @@
+// Cenu lapas skripts: ielādē pakalpojumu katalogu un cenas no API.
 async function loadCatalog() {
+    // Saņem pakalpojumus ar cenu pozīcijām un uzzīmē tos lapā.
     const catalogContainer = document.getElementById("priceCatalog");
     if (!catalogContainer) {
         return;
@@ -42,6 +44,7 @@ async function loadCatalog() {
 }
 
 function sectionSafeText(value) {
+    // Dinamisko tekstu pārvērš drošā HTML tekstā.
     const div = document.createElement("div");
     div.textContent = value ?? "";
     return div.innerHTML;

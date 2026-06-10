@@ -31,6 +31,7 @@ from psycopg.errors import InvalidCatalogName
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
+# Projekta pamatceļi, vides mainīgie un lapu piekļuves noteikumi.
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 HTML_PAGES = {path.name for path in BASE_DIR.glob("*.html")}
@@ -116,6 +117,7 @@ ADDITIONAL_FALLBACK_PRICES = [
 ]
 
 def fallback_price_service_name(service_name: str) -> str:
+    # Cenu importēšanas laikā mēģina atpazīt, kurai pakalpojumu kategorijai cena pieder.
     normalized_name = unicodedata.normalize("NFKD", service_name)
     normalized_name = normalized_name.encode("ascii", "ignore").decode("ascii").lower()
     if "tomograf" in normalized_name or "ct" in normalized_name:
@@ -196,6 +198,7 @@ LEGACY_GENERIC_SERVICE_DESCRIPTIONS = {
     "Daudzveidīgi vakcinācijas pakalpojumi.",
 }
 
+# Flask lietotnes konfigurācija un sensitīvās vērtības no vides mainīgajiem.
 app = Flask(__name__, static_folder=None)
 app.config["SECRET_KEY"] = os.environ.get(
     "FLASK_SECRET_KEY",
@@ -277,6 +280,7 @@ CHATBOT_CLINIC_KEYWORDS = (
 
 
 def normalize_chatbot_text(value: str) -> str:
+    # Tekstu vienkāršo, lai čatbots atpazītu jautājumus arī bez garumzīmēm.
     normalized = unicodedata.normalize("NFKD", value.lower())
     without_diacritics = "".join(
         character
@@ -287,6 +291,7 @@ def normalize_chatbot_text(value: str) -> str:
 
 
 def format_chatbot_price(value: float | int | str) -> str:
+    # Cenas tiek formatētas lietotājam saprotamā EUR formātā.
     try:
         amount = float(value)
     except (TypeError, ValueError):
@@ -295,6 +300,7 @@ def format_chatbot_price(value: float | int | str) -> str:
 
 
 def detect_chatbot_service_key(message: str) -> str | None:
+    # Pēc atslēgvārdiem nosaka, par kuru pakalpojumu lietotājs jautā.
     normalized_message = normalize_chatbot_text(message)
     for service_key, aliases in CHATBOT_SERVICE_ALIASES.items():
         if any(alias in normalized_message for alias in aliases):
@@ -308,6 +314,7 @@ def is_chatbot_greeting(message: str) -> bool:
 
 
 def is_clinic_related_message(message: str) -> bool:
+    # Čatbots atbild tikai uz jautājumiem, kas saistīti ar klīniku.
     normalized_message = normalize_chatbot_text(message)
     if not normalized_message.strip():
         return False
@@ -317,6 +324,7 @@ def is_clinic_related_message(message: str) -> bool:
 
 
 def fetch_chatbot_doctors(service_key: str | None = None) -> list[DbRow]:
+    # Čatbotam rāda tikai apstiprinātos ārstus.
     db = get_db()
     if service_key:
         return db.execute(
@@ -341,6 +349,7 @@ def fetch_chatbot_doctors(service_key: str | None = None) -> list[DbRow]:
 
 
 def fetch_chatbot_prices(service_label: str | None = None) -> list[DbRow]:
+    # Cenu sarakstu var ielādēt visam katalogam vai vienai procedūrai.
     db = get_db()
     if service_label:
         return db.execute(
@@ -363,6 +372,7 @@ def fetch_chatbot_prices(service_label: str | None = None) -> list[DbRow]:
 
 
 def build_doctor_listing_response(service_key: str | None) -> str:
+    # Sagatavo cilvēkam saprotamu čatbota atbildi par ārstiem.
     if service_key:
         doctors = fetch_chatbot_doctors(service_key)
         service_label = CHATBOT_SERVICE_LABELS[service_key]
@@ -397,6 +407,7 @@ def build_doctor_listing_response(service_key: str | None) -> str:
 
 
 def build_price_response(service_key: str | None) -> str:
+    # Sagatavo čatbota atbildi par cenām, izmantojot datubāzes datus.
     if service_key:
         service_label = CHATBOT_SERVICE_LABELS[service_key]
         prices = fetch_chatbot_prices(service_label)
@@ -435,6 +446,7 @@ def build_price_response(service_key: str | None) -> str:
 
 
 def build_services_response() -> str:
+    # Izveido īsu pakalpojumu sarakstu čatbota atbildei.
     services = get_db().execute(
         """
         SELECT service_name, description
@@ -486,6 +498,7 @@ def build_working_hours_response() -> str:
 
 
 def build_local_chatbot_response(message: str) -> tuple[str, bool]:
+    # Lokālā atbilžu loģika darbojas arī tad, ja OpenAI API nav pieejams.
     normalized_message = normalize_chatbot_text(message)
     service_key = detect_chatbot_service_key(message)
 
@@ -529,6 +542,7 @@ def build_local_chatbot_response(message: str) -> tuple[str, bool]:
 
 
 def build_clinic_chatbot_context() -> str:
+    # OpenAI čatbotam tiek padots konteksts no reālajiem projekta datiem.
     services = get_db().execute(
         """
         SELECT service_name, description
@@ -572,6 +586,7 @@ def build_clinic_chatbot_context() -> str:
 
 
 def extract_openai_response_text(payload: dict[str, Any]) -> str:
+    # No OpenAI atbildes struktūras izvelk tikai gala tekstu.
     output = payload.get("output")
     if not isinstance(output, list):
         return ""
@@ -602,6 +617,7 @@ def extract_openai_response_text(payload: dict[str, Any]) -> str:
 
 
 def call_openai_clinic_chatbot(message: str, history: list[dict[str, Any]]) -> str | None:
+    # Ja API atslēgas nav vai pieprasījums neizdodas, funkcija atgriež None un strādā lokālā atbilde.
     api_key = app.config.get("OPENAI_API_KEY", "")
     if not api_key:
         return None
@@ -682,6 +698,7 @@ def now_iso() -> str:
 
 
 def add_months(source_date: date, months: int) -> date:
+    # Pievieno mēnešus, saglabājot derīgu datumu arī īsākos mēnešos.
     month_index = source_date.month - 1 + months
     year = source_date.year + month_index // 12
     month = month_index % 12 + 1
@@ -690,6 +707,7 @@ def add_months(source_date: date, months: int) -> date:
 
 
 def parse_iso_date(value: str) -> date | None:
+    # Pārveido HTML datuma vērtību Python date objektā.
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
@@ -697,6 +715,7 @@ def parse_iso_date(value: str) -> date | None:
 
 
 def parse_iso_time(value: str) -> time | None:
+    # Pārveido HTML laika vērtību Python time objektā.
     try:
         return datetime.strptime(value, "%H:%M").time()
     except ValueError:
@@ -704,6 +723,7 @@ def parse_iso_time(value: str) -> time | None:
 
 
 def validate_booking_window(target_date: date) -> str | None:
+    # Pierakstus atļauj veidot tikai no šodienas līdz trīs mēnešiem uz priekšu.
     today = date.today()
     max_date = add_months(today, 3)
     if target_date < today or target_date > max_date:
@@ -712,6 +732,7 @@ def validate_booking_window(target_date: date) -> str | None:
 
 
 def get_working_hours_for_date(target_date: date) -> tuple[int, int] | None:
+    # Darba laiku atgriež minūtēs, lai laiku salīdzināšana būtu vienkārša.
     weekday = target_date.weekday()
     if weekday <= 4:
         return (9 * 60, 21 * 60)
@@ -721,6 +742,7 @@ def get_working_hours_for_date(target_date: date) -> tuple[int, int] | None:
 
 
 def validate_appointment_schedule(datums: str, laiks: str) -> str | None:
+    # Servera puses validācija pasargā no nekorektiem pieraksta datiem.
     appointment_date = parse_iso_date(datums)
     if appointment_date is None:
         return "Lūdzu izvēlieties korektu datumu."
@@ -759,6 +781,7 @@ DOCTOR_SLOT_ALREADY_BOOKED_MESSAGE = "Šis laiks vairs nav pieejams. Lūdzu izv�
 
 
 def appointment_owner_column(role: str) -> str:
+    # Atkarībā no konta lomas izvēlas, pēc kuras kolonnas meklēt pierakstu īpašnieku.
     if role == "doctor":
         return "doctor_id"
     return "user_id"
@@ -771,6 +794,7 @@ def find_active_procedure_appointment(
     *,
     exclude_appointment_id: int | None = None,
 ) -> DbRow | None:
+    # Neļauj vienam kontam vienlaikus turēt vairākus aktīvus pierakstus uz to pašu procedūru.
     if owner_id is None or not procedura:
         return None
 
@@ -808,6 +832,7 @@ def is_valid_doctor_approval_status(status: str) -> bool:
 
 
 def doctor_has_access(row: DbRow | dict[str, Any]) -> bool:
+    # Ārsta konts sistēmā darbojas tikai pēc administratora apstiprinājuma.
     if isinstance(row, DbRow):
         status = row["approval_status"]
     else:
@@ -828,6 +853,7 @@ def doctor_display_name(name: str | None, surname: str | None) -> str:
 
 
 def appointment_to_dict(row: DbRow) -> dict[str, Any]:
+    # API atbildē pievieno pilnu ārsta vārdu, lai frontendam tas nav jāveido pašam.
     data = row_to_dict(row)
     if "doctor_name" in data or "doctor_surname" in data:
         data["doctor_full_name"] = doctor_display_name(
@@ -838,6 +864,7 @@ def appointment_to_dict(row: DbRow) -> dict[str, Any]:
 
 
 def validate_appointment_doctor(doctor_id: Any, procedura: str) -> DbRow | None:
+    # Pārbauda, vai ārsts ir apstiprināts un atbilst izvēlētajai procedūrai.
     if doctor_id in (None, ""):
         return None
 
@@ -866,6 +893,7 @@ def public_doctor_option_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
 
 
 def public_user_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
+    # Uz klienta pusi nesūta paroles hash, tikai publiski vajadzīgos lietotāja datus.
     return {
         "id": row["id"],
         "name": row["name"],
@@ -881,6 +909,7 @@ def public_user_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
 
 
 def public_doctor_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
+    # Ārsta publiskajā objektā iekļauj arī specializāciju un apstiprinājuma statusu.
     return {
         "id": row["id"],
         "name": row["name"],
@@ -898,6 +927,7 @@ def public_doctor_dict(row: DbRow | dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_month_value(value: str) -> tuple[date, date] | None:
+    # Ārsta kalendāram pārveido YYYY-MM vērtību par mēneša sākumu un beigām.
     parts = value.split("-")
     if len(parts) != 2:
         return None
@@ -917,12 +947,14 @@ def parse_month_value(value: str) -> tuple[date, date] | None:
 
 
 def serialize_time_from_minutes(total_minutes: int) -> str:
+    # Minūšu skaitu pārvērš HH:MM tekstā.
     hours = total_minutes // 60
     minutes = total_minutes % 60
     return f"{hours:02d}:{minutes:02d}"
 
 
 def build_time_slots_for_date(target_date: date) -> list[str]:
+    # Ģenerē visus iespējamos 15 minūšu slotus konkrētai darba dienai.
     working_hours = get_working_hours_for_date(target_date)
     if working_hours is None:
         return []
@@ -935,6 +967,7 @@ def build_time_slots_for_date(target_date: date) -> list[str]:
 
 
 def get_doctor_configured_times(doctor_id: int, datums: str) -> list[str]:
+    # Nolasa laikus, kurus ārsts pats ir atzīmējis kā pieejamus.
     rows = get_db().execute(
         """
         SELECT available_time
@@ -953,6 +986,7 @@ def get_doctor_booked_times(
     *,
     exclude_appointment_id: int | None = None,
 ) -> list[str]:
+    # Nolasa jau aizņemtos laikus, lai tie netiktu piedāvāti atkārtoti.
     query = """
         SELECT laiks
         FROM appointments
@@ -974,6 +1008,7 @@ def build_doctor_day_schedule_payload(
     *,
     exclude_appointment_id: int | None = None,
 ) -> dict[str, Any]:
+    # Apvieno ārsta pieejamos, aizņemtos un brīvos laikus vienā objektā.
     date_value = target_date.isoformat()
     configured_times = get_doctor_configured_times(doctor_id, date_value)
     booked_times = get_doctor_booked_times(
@@ -999,6 +1034,7 @@ def build_doctor_month_schedule_summary(
     month_start: date,
     month_end: date,
 ) -> dict[str, dict[str, int]]:
+    # Kalendāram apkopo katras dienas brīvo, aizņemto un kopējo slotu skaitu.
     db = get_db()
     date_from = month_start.isoformat()
     date_to = month_end.isoformat()
@@ -1048,6 +1084,7 @@ def build_doctor_month_schedule_summary(
 
 
 def get_doctor_open_dates(doctor_id: int) -> list[dict[str, Any]]:
+    # Pacienta pieraksta formai atgriež tikai dienas ar brīviem laikiem.
     today = date.today().isoformat()
     max_date = add_months(date.today(), 3).isoformat()
     rows = get_db().execute(
@@ -1083,6 +1120,7 @@ def validate_doctor_slot_selection(
     *,
     exclude_appointment_id: int | None = None,
 ) -> tuple[str | None, int | None]:
+    # Pirms pieraksta saglabāšanas vēlreiz pārbauda, vai izvēlētais laiks ir brīvs.
     configured_times = set(get_doctor_configured_times(doctor_id, datums))
     if laiks not in configured_times:
         return DOCTOR_SLOT_UNAVAILABLE_MESSAGE, 400
@@ -1101,6 +1139,7 @@ def validate_doctor_slot_selection(
 
 
 def current_user_row() -> DbRow | None:
+    # Atrod sesijā ielogoto pacientu, ja tāds ir.
     user_id = session.get("user_id")
     if not user_id:
         return None
@@ -1108,6 +1147,7 @@ def current_user_row() -> DbRow | None:
 
 
 def current_doctor_row() -> DbRow | None:
+    # Atrod sesijā ielogoto ārstu, ja tāds ir.
     doctor_id = session.get("doctor_id")
     if not doctor_id:
         return None
@@ -1115,6 +1155,7 @@ def current_doctor_row() -> DbRow | None:
 
 
 def current_account() -> dict[str, Any] | None:
+    # Vienotā veidā nosaka pašreizējo kontu neatkarīgi no tā, vai tas ir pacients vai ārsts.
     user = current_user_row()
     if user is not None:
         return {
@@ -1136,12 +1177,14 @@ def current_account() -> dict[str, Any] | None:
 
 
 def public_account_dict(account: DbRow | dict[str, Any]) -> dict[str, Any]:
+    # Izvēlas pareizo publisko datu formātu pēc konta lomas.
     if account["role"] == "doctor":
         return public_doctor_dict(account)
     return public_user_dict(account)
 
 
 def clear_account_session() -> None:
+    # Izrakstoties notīra abas iespējamās konta sesijas vērtības.
     session.pop("user_id", None)
     session.pop("doctor_id", None)
 
@@ -1151,6 +1194,7 @@ def user_email_exists(
     *,
     exclude_user_id: int | None = None,
 ) -> bool:
+    # Pārbauda, vai pacienta e-pasts jau netiek izmantots.
     db = get_db()
 
     user_query = "SELECT id FROM users WHERE email = ?"
@@ -1168,6 +1212,7 @@ def doctor_email_exists(
     *,
     exclude_doctor_id: int | None = None,
 ) -> bool:
+    # Pārbauda, vai ārsta e-pasts jau netiek izmantots.
     db = get_db()
 
     doctor_query = "SELECT id FROM doctors WHERE email = ?"
@@ -1181,10 +1226,12 @@ def doctor_email_exists(
 
 
 def clean_html_text(value: str) -> str:
+    # No HTML fragmentiem iztīra liekas atstarpes un HTML simbolus.
     return html.unescape(re.sub(r"\s+", " ", value).strip())
 
 
 def normalize_public_asset_path(value: str) -> str:
+    # Attēlu ceļus normalizē tā, lai frontend tos varētu droši izmantot.
     path = (value or "").strip()
     if not path:
         return ""
@@ -1194,11 +1241,13 @@ def normalize_public_asset_path(value: str) -> str:
 
 
 def normalize_lookup(value: str) -> str:
+    # Nosaukumus vienkāršo salīdzināšanai neatkarīgi no garumzīmēm.
     normalized = unicodedata.normalize("NFKD", value)
     return normalized.encode("ascii", "ignore").decode("ascii").lower()
 
 
 def service_public_meta(service_name: str) -> dict[str, str]:
+    # Pakalpojumam piemeklē publiskās lapas attēlu, detalizēto lapu un pogas tekstu.
     normalized_name = normalize_lookup(service_name)
 
     if "tomograf" in normalized_name or "ct" in normalized_name:
@@ -1230,6 +1279,7 @@ def service_public_meta(service_name: str) -> dict[str, str]:
 
 
 def resolve_service_description(service_name: str, stored_description: str) -> str:
+    # Ja datubāzē ir tukšs vai vecs apraksts, izmanto kvalitatīvāku noklusējuma tekstu.
     description = (stored_description or "").strip()
     if not description or description in LEGACY_GENERIC_SERVICE_DESCRIPTIONS:
         return SERVICE_DESCRIPTION_MAP.get(service_name, description)
@@ -1237,6 +1287,7 @@ def resolve_service_description(service_name: str, stored_description: str) -> s
 
 
 def load_catalog_data() -> tuple[list[tuple[str, str]], list[tuple[str, str, float]]]:
+    # Sākotnējo pakalpojumu katalogu ielasa no cenas.html vai izmanto rezerves datus.
     cenas_path = BASE_DIR / "cenas.html"
     if not cenas_path.exists():
         return FALLBACK_SERVICES, DEFAULT_PRICES
@@ -1280,6 +1331,7 @@ def load_catalog_data() -> tuple[list[tuple[str, str]], list[tuple[str, str, flo
 
 
 def load_about_data() -> list[dict[str, Any]]:
+    # Par mums lapas sākotnējais saturs tiek ielasīts no esošā HTML faila.
     about_path = BASE_DIR / "parmums.html"
     if not about_path.exists():
         return FALLBACK_ABOUT_CONTENT
@@ -1363,6 +1415,7 @@ def load_about_data() -> list[dict[str, Any]]:
 
 
 class DbRow:
+    # Vienkārša rindu klase, lai datubāzes rezultātus varētu lasīt gan pēc indeksa, gan kolonnas nosaukuma.
     def __init__(self, columns: list[str], values: tuple[Any, ...]) -> None:
         self._columns = columns
         self._values = values
@@ -1384,6 +1437,7 @@ class DbRow:
 
 
 class PostgresCursor:
+    # Aptin psycopg kursoru, lai pārējais kods varētu strādāt ar DbRow objektiem.
     def __init__(self, cursor) -> None:
         self._cursor = cursor
         self.lastrowid: int | None = None
@@ -1407,6 +1461,7 @@ class PostgresCursor:
 
 
 class PostgresConnection:
+    # Datubāzes savienojuma klase, kas pielāgo SQLite stila vaicājumus PostgreSQL videi.
     def __init__(self) -> None:
         if not DATABASE_URL:
             raise RuntimeError(
@@ -1542,6 +1597,7 @@ DEMO_LOCATIONS_BY_PROCEDURE = {
 
 
 def get_seeded_row_id(connection: PostgresConnection, table_name: str, email: str) -> int:
+    # Pēc demo konta e-pasta atrod tā ID turpmākai datu sasaistīšanai.
     row = connection.execute(
         f"SELECT id FROM {table_name} WHERE email = ?",
         (email,),
@@ -1552,6 +1608,7 @@ def get_seeded_row_id(connection: PostgresConnection, table_name: str, email: st
 
 
 def seed_demo_accounts(connection: PostgresConnection) -> tuple[dict[str, int], dict[str, int]]:
+    # Izveido demo pacientus un ārstus, lai projekts uzreiz būtu pārbaudāms.
     timestamp = now_iso()
     password_hash = generate_password_hash(DEMO_PASSWORD)
 
@@ -1614,6 +1671,7 @@ def seed_demo_accounts(connection: PostgresConnection) -> tuple[dict[str, int], 
 
 
 def demo_schedule_times(procedure: str, weekday: int, doctor_index: int) -> list[str]:
+    # Demo grafikam ģenerē atšķirīgus laikus pēc procedūras un nedēļas dienas.
     if weekday == 6:
         return []
 
@@ -1642,6 +1700,7 @@ def seed_demo_doctor_availability(
     connection: PostgresConnection,
     doctor_ids: dict[str, int],
 ) -> None:
+    # Aizpilda demo ārstu pieejamības grafikus tuvākajam mēnesim.
     timestamp = now_iso()
     today = date.today()
     rows: list[tuple[int, str, str, str, str]] = []
@@ -1671,6 +1730,7 @@ def find_demo_slot(
     day_offset: int,
     preferred_index: int,
 ) -> tuple[str, str]:
+    # Atrod pirmo brīvo demo laiku, lai automātiski izveidotie pieraksti nepārklātos.
     for extra_days in range(0, 31):
         target_date = date.today() + timedelta(days=day_offset + extra_days)
         rows = connection.execute(
@@ -1705,6 +1765,7 @@ def seed_demo_appointments(
     user_ids: dict[str, int],
     doctor_ids: dict[str, int],
 ) -> None:
+    # Izveido demo pacientu pierakstus pie dažādiem ārstiem un procedūrām.
     timestamp = now_iso()
     plans = [
         (0, 0, 0, 1, "Profilaktiska apskate un asinsspiediena kontrole."),
@@ -1799,12 +1860,14 @@ def seed_demo_appointments(
 
 
 def seed_demo_data(connection: PostgresConnection) -> None:
+    # Vienā solī sagatavo demo kontus, ārstu grafikus un pierakstus.
     user_ids, doctor_ids = seed_demo_accounts(connection)
     seed_demo_doctor_availability(connection, doctor_ids)
     seed_demo_appointments(connection, user_ids, doctor_ids)
 
 
 def get_db() -> PostgresConnection:
+    # Viena pieprasījuma laikā atkārtoti izmanto to pašu datubāzes savienojumu.
     if "db" not in g:
         g.db = PostgresConnection()
     return g.db
@@ -1812,12 +1875,14 @@ def get_db() -> PostgresConnection:
 
 @app.teardown_appcontext
 def close_db(_: BaseException | None) -> None:
+    # Pēc pieprasījuma beigām aizver datubāzes savienojumu.
     connection = g.pop("db", None)
     if connection is not None:
         connection.close()
 
 
 def init_db() -> None:
+    # Inicializē tabulas, indeksus un sākotnējos datus, ja tie vēl nav izveidoti.
     connection = PostgresConnection()
     services_seed, prices_seed = load_catalog_data()
     about_seed = load_about_data()
@@ -2103,10 +2168,12 @@ def init_db() -> None:
 
 
 def row_to_dict(row: DbRow) -> dict[str, Any]:
+    # Datubāzes rindu pārveido par vārdnīcu JSON atbildēm.
     return {key: row[key] for key in row.keys()}
 
 
 def login_required(view):
+    # Dekorators API maršrutiem, kuriem vajadzīgs jebkurš ielogots konts.
     @wraps(view)
     def wrapped(*args, **kwargs):
         account = current_account()
@@ -2118,6 +2185,7 @@ def login_required(view):
 
 
 def patient_required(view):
+    # Dekorators maršrutiem, kurus drīkst izmantot tikai pacients.
     @wraps(view)
     def wrapped(*args, **kwargs):
         account = current_account()
@@ -2131,6 +2199,7 @@ def patient_required(view):
 
 
 def doctor_required(view):
+    # Dekorators maršrutiem, kurus drīkst izmantot tikai apstiprināts ārsts.
     @wraps(view)
     def wrapped(*args, **kwargs):
         account = current_account()
@@ -2144,6 +2213,7 @@ def doctor_required(view):
 
 
 def admin_required(view):
+    # Dekorators administratora API aizsardzībai.
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("is_admin"):
@@ -2155,6 +2225,7 @@ def admin_required(view):
 
 @app.route("/")
 def index() -> Any:
+    # Galvenā lapa tiek pasniegta kā statisks HTML fails.
     return send_from_directory(BASE_DIR, "index.html")
 
 
@@ -2170,6 +2241,7 @@ def images(filename: str) -> Any:
 
 @app.route("/<path:filename>")
 def pages(filename: str) -> Any:
+    # Pirms HTML lapas atdošanas pārbauda, vai lietotājam ir tiesības to skatīt.
     account = current_account()
 
     if filename in ACCOUNT_ONLY_PAGES and account is None:
@@ -2203,6 +2275,7 @@ def handle_404(_: Exception) -> Any:
 
 @app.post("/api/register")
 def api_register() -> Any:
+    # Reģistrē jaunu pacientu un paroli glabā tikai hash veidā.
     payload = request.get_json(silent=True) or {}
 
     name = str(payload.get("name", "")).strip()
@@ -2247,6 +2320,7 @@ def api_register() -> Any:
 
 @app.post("/api/doctors/register")
 def api_register_doctor() -> Any:
+    # Ārsta reģistrācija izveido kontu ar statusu "pending", līdz administrators to apstiprina.
     payload = request.get_json(silent=True) or {}
 
     name = str(payload.get("name", "")).strip()
@@ -2309,6 +2383,7 @@ def api_register_doctor() -> Any:
 
 @app.post("/api/login")
 def api_login() -> Any:
+    # Ielogo pacientu vai ārstu, pārbaudot paroli un konta lomu.
     payload = request.get_json(silent=True) or {}
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
@@ -2372,6 +2447,7 @@ def api_me(account: dict[str, Any]) -> Any:
 @app.put("/api/me")
 @login_required
 def api_update_me(account: dict[str, Any]) -> Any:
+    # Lietotājs vai ārsts var labot savus profila datus.
     payload = request.get_json(silent=True) or {}
 
     name = str(payload.get("name", "")).strip()
@@ -2452,6 +2528,7 @@ def api_update_me(account: dict[str, Any]) -> Any:
 @app.get("/api/my-appointments")
 @login_required
 def api_my_appointments(account: dict[str, Any]) -> Any:
+    # Pacientam rāda viņa pierakstus, bet ārstam - pacientu pierakstus pie šī ārsta.
     db = get_db()
 
     if account["role"] == "doctor":
@@ -2489,6 +2566,7 @@ def api_my_appointments(account: dict[str, Any]) -> Any:
 @app.delete("/api/my-appointments/<int:appointment_id>")
 @patient_required
 def api_delete_my_appointment(account: dict[str, Any], appointment_id: int) -> Any:
+    # Pacients drīkst atcelt tikai savus pierakstus.
     db = get_db()
     appointment = db.execute(
         """
@@ -2511,6 +2589,7 @@ def api_delete_my_appointment(account: dict[str, Any], appointment_id: int) -> A
 @app.get("/api/doctor/schedule")
 @doctor_required
 def api_doctor_schedule(account: dict[str, Any]) -> Any:
+    # Ārsts var ielādēt mēneša kopsavilkumu vai konkrētas dienas grafiku.
     month_value = str(request.args.get("month", "")).strip()
     date_value = str(request.args.get("date", "")).strip()
 
@@ -2553,6 +2632,7 @@ def api_doctor_schedule(account: dict[str, Any]) -> Any:
 @app.put("/api/doctor/schedule")
 @doctor_required
 def api_update_doctor_schedule(account: dict[str, Any]) -> Any:
+    # Ārsts saglabā dienas pieejamos laikus; jau aizņemtie laiki netiek izdzēsti.
     payload = request.get_json(silent=True) or {}
     date_value = str(payload.get("date", "")).strip()
     raw_times = payload.get("available_times", [])
@@ -2614,6 +2694,7 @@ def api_update_doctor_schedule(account: dict[str, Any]) -> Any:
 @app.get("/api/doctors/<int:doctor_id>/available-slots")
 @patient_required
 def api_doctor_available_slots(account: dict[str, Any], doctor_id: int) -> Any:
+    # Pacienta formai atgriež konkrēta ārsta brīvos laikus izvēlētajā datumā.
     del account
     procedura = str(request.args.get("procedura", "")).strip()
     date_value = str(request.args.get("date", "")).strip()
@@ -2648,6 +2729,7 @@ def api_doctor_available_slots(account: dict[str, Any], doctor_id: int) -> Any:
 @app.get("/api/doctors/<int:doctor_id>/available-dates")
 @patient_required
 def api_doctor_available_dates(account: dict[str, Any], doctor_id: int) -> Any:
+    # Pacienta formai atgriež datumus, kuros izvēlētajam ārstam vēl ir brīvi laiki.
     del account
     procedura = str(request.args.get("procedura", "")).strip()
 
@@ -2668,6 +2750,7 @@ def api_doctor_available_dates(account: dict[str, Any], doctor_id: int) -> Any:
 
 @app.get("/api/catalog")
 def api_catalog() -> Any:
+    # Publiskajām lapām atgriež pakalpojumus kopā ar cenām un lapas metadatiem.
     db = get_db()
     service_rows = db.execute(
         "SELECT * FROM services ORDER BY id ASC"
@@ -2717,6 +2800,7 @@ def api_catalog() -> Any:
 
 @app.get("/api/about")
 def api_about() -> Any:
+    # Publiskajai "Par mums" lapai atgriež administrējamu saturu.
     rows = get_db().execute(
         """
         SELECT *
@@ -2755,6 +2839,7 @@ def api_about() -> Any:
 @app.get("/api/doctors")
 @patient_required
 def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
+    # Pieraksta formai atgriež tikai izvēlētajai procedūrai atbilstošus ārstus.
     procedura = str(request.args.get("procedura", "")).strip()
     if not procedura:
         return jsonify([])
@@ -2776,6 +2861,7 @@ def api_doctors_by_procedure(account: dict[str, Any]) -> Any:
 
 @app.post("/api/chatbot")
 def api_chatbot() -> Any:
+    # Saņem lietotāja jautājumu un atbild ar lokālo vai OpenAI čatbota atbildi.
     payload = request.get_json(silent=True) or {}
     message = str(payload.get("message", "")).strip()
     history = payload.get("history")
@@ -2801,6 +2887,7 @@ def api_chatbot() -> Any:
 
 @app.post("/api/contact-messages")
 def api_create_contact_message() -> Any:
+    # Saglabā kontaktformas ziņojumu gan viesiem, gan ielogotiem kontiem.
     payload = request.get_json(silent=True) or {}
     account = current_account()
 
@@ -2877,6 +2964,7 @@ def api_create_contact_message() -> Any:
 @app.post("/api/update-password")
 @login_required
 def api_update_password(account: dict[str, Any]) -> Any:
+    # Paroles maiņa pārbauda veco paroli un saglabā tikai jaunu hash vērtību.
     payload = request.get_json(silent=True) or {}
     password = str(payload.get("password", ""))
 
@@ -2911,6 +2999,7 @@ def api_update_password(account: dict[str, Any]) -> Any:
 @app.post("/api/appointments")
 @patient_required
 def api_create_appointment(account: dict[str, Any]) -> Any:
+    # Izveido pacienta pierakstu, pārbaudot procedūru, ārstu, datumu un brīvo laiku.
     payload = request.get_json(silent=True) or {}
 
     name = str(payload.get("name", "")).strip()
@@ -3004,6 +3093,7 @@ def api_create_appointment(account: dict[str, Any]) -> Any:
 
 @app.post("/api/admin/login")
 def api_admin_login() -> Any:
+    # Administratora pieteikšanās izmanto atsevišķus konfigurācijas datus.
     payload = request.get_json(silent=True) or {}
     email = str(payload.get("email", "")).strip()
     password = str(payload.get("password", ""))
@@ -3021,6 +3111,7 @@ def api_admin_login() -> Any:
 @app.post("/api/admin/logout")
 @admin_required
 def api_admin_logout() -> Any:
+    # Administratora sesija tiek notīrīta atsevišķi no pacienta/ārsta sesijas.
     session.pop("is_admin", None)
     return jsonify({"message": "Admin logged out"})
 
@@ -3028,6 +3119,7 @@ def api_admin_logout() -> Any:
 @app.get("/api/admin/users")
 @admin_required
 def api_admin_users() -> Any:
+    # Admin panelim atgriež visus pacientu kontus.
     rows = get_db().execute(
         "SELECT * FROM users ORDER BY created_at DESC"
     ).fetchall()
@@ -3037,6 +3129,7 @@ def api_admin_users() -> Any:
 @app.post("/api/admin/users")
 @admin_required
 def api_admin_create_user() -> Any:
+    # Administrators var manuāli izveidot pacienta kontu.
     payload = request.get_json(silent=True) or {}
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
@@ -3075,6 +3168,7 @@ def api_admin_create_user() -> Any:
 @app.delete("/api/admin/users/<int:user_id>")
 @admin_required
 def api_admin_delete_user(user_id: int) -> Any:
+    # Dzēš pacienta kontu pēc administratora pieprasījuma.
     db = get_db()
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))
     db.commit()
@@ -3084,6 +3178,7 @@ def api_admin_delete_user(user_id: int) -> Any:
 @app.put("/api/admin/users/<int:user_id>")
 @admin_required
 def api_admin_update_user(user_id: int) -> Any:
+    # Administrators var labot pacienta datus un pēc vajadzības nomainīt paroli.
     payload = request.get_json(silent=True) or {}
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
@@ -3132,6 +3227,7 @@ def api_admin_update_user(user_id: int) -> Any:
 @app.get("/api/admin/doctors")
 @admin_required
 def api_admin_doctors() -> Any:
+    # Admin panelim atgriež visus ārstu kontus.
     rows = get_db().execute(
         "SELECT * FROM doctors ORDER BY created_at DESC"
     ).fetchall()
@@ -3141,6 +3237,7 @@ def api_admin_doctors() -> Any:
 @app.post("/api/admin/doctors")
 @admin_required
 def api_admin_create_doctor() -> Any:
+    # Administrators var izveidot ārsta kontu un uzreiz noteikt tā statusu.
     payload = request.get_json(silent=True) or {}
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
@@ -3203,6 +3300,7 @@ def api_admin_create_doctor() -> Any:
 @app.delete("/api/admin/doctors/<int:doctor_id>")
 @admin_required
 def api_admin_delete_doctor(doctor_id: int) -> Any:
+    # Dzēšot ārstu, esošie pieraksti netiek dzēsti, bet tiek atsaistīti no ārsta.
     db = get_db()
     db.execute(
         "UPDATE appointments SET doctor_id = NULL, updated_at = ? WHERE doctor_id = ?",
@@ -3216,6 +3314,7 @@ def api_admin_delete_doctor(doctor_id: int) -> Any:
 @app.put("/api/admin/doctors/<int:doctor_id>")
 @admin_required
 def api_admin_update_doctor(doctor_id: int) -> Any:
+    # Labo ārsta profilu; ja mainās specializācija vai statuss, pieraksti tiek atsaistīti.
     payload = request.get_json(silent=True) or {}
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
@@ -3297,6 +3396,7 @@ def api_admin_update_doctor(doctor_id: int) -> Any:
 @app.put("/api/admin/doctors/<int:doctor_id>/status")
 @admin_required
 def api_admin_update_doctor_status(doctor_id: int) -> Any:
+    # Ātri maina ārsta apstiprinājuma statusu no admin paneļa.
     payload = request.get_json(silent=True) or {}
     approval_status = str(payload.get("approval_status", "")).strip().lower()
 
@@ -3342,6 +3442,7 @@ def api_admin_update_doctor_status(doctor_id: int) -> Any:
 @app.get("/api/admin/about-content")
 @admin_required
 def api_admin_about_content() -> Any:
+    # Admin panelim atgriež "Par mums" lapas rediģējamos ierakstus.
     rows = get_db().execute(
         """
         SELECT *
@@ -3355,6 +3456,7 @@ def api_admin_about_content() -> Any:
 @app.put("/api/admin/about-content/<int:entry_id>")
 @admin_required
 def api_admin_update_about_content(entry_id: int) -> Any:
+    # Atjaunina vienu "Par mums" satura ierakstu.
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title", "")).strip()
     content = str(payload.get("content", "")).strip()
@@ -3424,6 +3526,7 @@ def api_admin_update_about_content(entry_id: int) -> Any:
 @app.get("/api/admin/contact-messages")
 @admin_required
 def api_admin_contact_messages() -> Any:
+    # Admin panelī parāda visus kontaktformas ziņojumus.
     rows = get_db().execute(
         """
         SELECT *
@@ -3437,6 +3540,7 @@ def api_admin_contact_messages() -> Any:
 @app.delete("/api/admin/contact-messages/<int:message_id>")
 @admin_required
 def api_admin_delete_contact_message(message_id: int) -> Any:
+    # Administrators var dzēst apstrādātus vai nevajadzīgus ziņojumus.
     db = get_db()
     existing_message = db.execute(
         "SELECT id FROM contact_messages WHERE id = ?",
@@ -3453,6 +3557,7 @@ def api_admin_delete_contact_message(message_id: int) -> Any:
 @app.get("/api/admin/services")
 @admin_required
 def api_admin_services() -> Any:
+    # Atgriež visus pakalpojumus admin paneļa sarakstam.
     rows = get_db().execute(
         "SELECT * FROM services ORDER BY id ASC"
     ).fetchall()
@@ -3462,6 +3567,7 @@ def api_admin_services() -> Any:
 @app.post("/api/admin/services")
 @admin_required
 def api_admin_create_service() -> Any:
+    # Izveido jaunu pakalpojumu kategoriju.
     payload = request.get_json(silent=True) or {}
     service_name = str(payload.get("serviceName", "")).strip()
     description = str(payload.get("description", "")).strip()
@@ -3486,6 +3592,7 @@ def api_admin_create_service() -> Any:
 @app.delete("/api/admin/services/<int:service_id>")
 @admin_required
 def api_admin_delete_service(service_id: int) -> Any:
+    # Dzēšot pakalpojumu, dzēš arī ar to saistītās cenas.
     db = get_db()
     service = db.execute(
         "SELECT service_name FROM services WHERE id = ?",
@@ -3506,6 +3613,7 @@ def api_admin_delete_service(service_id: int) -> Any:
 @app.put("/api/admin/services/<int:service_id>")
 @admin_required
 def api_admin_update_service(service_id: int) -> Any:
+    # Atjaunina pakalpojuma nosaukumu un sinhronizē šo nosaukumu cenu tabulā.
     payload = request.get_json(silent=True) or {}
     service_name = str(payload.get("serviceName", "")).strip()
     description = str(payload.get("description", "")).strip()
@@ -3546,6 +3654,7 @@ def api_admin_update_service(service_id: int) -> Any:
 @app.get("/api/admin/prices")
 @admin_required
 def api_admin_prices() -> Any:
+    # Atgriež visus cenu ierakstus admin panelim.
     rows = get_db().execute(
         "SELECT * FROM prices ORDER BY id ASC"
     ).fetchall()
@@ -3555,6 +3664,7 @@ def api_admin_prices() -> Any:
 @app.post("/api/admin/prices")
 @admin_required
 def api_admin_create_price() -> Any:
+    # Izveido jaunu cenu konkrētam pakalpojumam.
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title", "")).strip()
     service_name = str(payload.get("service", "")).strip()
@@ -3585,6 +3695,7 @@ def api_admin_create_price() -> Any:
 @app.delete("/api/admin/prices/<int:price_id>")
 @admin_required
 def api_admin_delete_price(price_id: int) -> Any:
+    # Dzēš vienu cenu ierakstu.
     db = get_db()
     db.execute("DELETE FROM prices WHERE id = ?", (price_id,))
     db.commit()
@@ -3594,6 +3705,7 @@ def api_admin_delete_price(price_id: int) -> Any:
 @app.put("/api/admin/prices/<int:price_id>")
 @admin_required
 def api_admin_update_price(price_id: int) -> Any:
+    # Atjaunina cenu, pārbaudot, vai ievadītā vērtība tiešām ir skaitlis.
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title", "")).strip()
     service_name = str(payload.get("service", "")).strip()
@@ -3629,6 +3741,7 @@ def api_admin_update_price(price_id: int) -> Any:
 @app.get("/api/admin/appointments")
 @admin_required
 def api_admin_appointments() -> Any:
+    # Admin panelim atgriež visus pierakstus kopā ar ārsta informāciju.
     rows = get_db().execute(
         """
         SELECT
@@ -3646,6 +3759,7 @@ def api_admin_appointments() -> Any:
 @app.put("/api/admin/appointments/<int:appointment_id>")
 @admin_required
 def api_admin_update_appointment(appointment_id: int) -> Any:
+    # Administrators var labot pierakstu, bet sistēma joprojām pārbauda grafiku un konfliktus.
     payload = request.get_json(silent=True) or {}
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
@@ -3756,6 +3870,7 @@ def api_admin_update_appointment(appointment_id: int) -> Any:
 @app.delete("/api/admin/appointments/<int:appointment_id>")
 @admin_required
 def api_admin_delete_appointment(appointment_id: int) -> Any:
+    # Dzēš pierakstu no admin paneļa.
     db = get_db()
     db.execute("DELETE FROM appointments WHERE id = ?", (appointment_id,))
     db.commit()

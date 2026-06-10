@@ -1,3 +1,4 @@
+// Galvenais publiskās lapas skripts: tumšais režīms, navigācija, čatbots un kopējā lapas uzvedība.
 const DARK_MODE_KEY = "darkMode";
 const APPOINTMENT_LOGIN_REQUIRED_MESSAGE = "Lai pieteiktos uz procedūru, Jums ir jābūt reģistrētam lietotājam!";
 const DOCTOR_APPOINTMENT_RESTRICTED_MESSAGE = "Ārsta kontam procedūru pieteikšana nav pieejama.";
@@ -27,6 +28,7 @@ const chatbotState = {
 };
 
 function escapeChatbotHtml(value) {
+    // Aizsargā čatbota ziņojumu attēlošanu pret HTML ievadi.
     return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -36,6 +38,7 @@ function escapeChatbotHtml(value) {
 }
 
 function safeSessionStorageGet(key) {
+    // sessionStorage var nebūt pieejams, tāpēc piekļuve tiek veikta droši.
     try {
         return window.sessionStorage.getItem(key);
     } catch (error) {
@@ -87,6 +90,7 @@ function getChatbotSessionKey(account) {
 }
 
 function loadChatbotState() {
+    // Ielādē iepriekšējo čatbota sarunu un atvēršanas stāvokli.
     const storedHistory = safeSessionStorageGet(CHATBOT_HISTORY_STORAGE_KEY);
     const storedOpenState = safeSessionStorageGet(CHATBOT_OPEN_STORAGE_KEY);
 
@@ -112,6 +116,7 @@ function loadChatbotState() {
 }
 
 function persistChatbotState() {
+    // Saglabā čatbota sarunu, lai tā nepazustu pēc lapas pārlādes.
     safeSessionStorageSet(
         CHATBOT_HISTORY_STORAGE_KEY,
         JSON.stringify(chatbotState.history.slice(-CHATBOT_MAX_HISTORY_ITEMS))
@@ -120,6 +125,7 @@ function persistChatbotState() {
 }
 
 function resetChatbotConversation(options = {}) {
+    // Atiestata sarunu, piemēram, kad mainās lietotāja sesija.
     const shouldRemoveSessionKey = options.removeSessionKey === true;
     chatbotState.history = getDefaultChatbotHistory();
     chatbotState.loading = false;
@@ -371,6 +377,7 @@ function ensureChatbotStyles() {
 }
 
 function renderChatbotMessages() {
+    // Pārzīmē čatbota ziņojumus un parāda "raksta" stāvokli, kamēr gaida atbildi.
     const messagesContainer = document.getElementById("clinicChatbotMessages");
     if (!messagesContainer) {
         return;
@@ -393,6 +400,7 @@ function renderChatbotMessages() {
 }
 
 function setChatbotOpenState(isOpen) {
+    // Atver vai aizver čatbota logu un saglabā izvēli.
     const shell = document.getElementById("clinicChatbotShell");
     const toggle = document.getElementById("clinicChatbotToggle");
     if (!shell || !toggle) {
@@ -410,6 +418,7 @@ function setChatbotOpenState(isOpen) {
 }
 
 function appendChatbotMessage(role, content) {
+    // Pievieno sarunai jaunu lietotāja vai asistenta ziņojumu.
     chatbotState.history.push({
         role,
         content: String(content || "").trim()
@@ -422,6 +431,7 @@ function appendChatbotMessage(role, content) {
 }
 
 async function sendChatbotMessage(rawMessage) {
+    // Nosūta jautājumu backend čatbota API un apstrādā saņemto atbildi.
     const message = String(rawMessage || "").trim();
     if (!message || chatbotState.loading) {
         return;
@@ -462,6 +472,7 @@ async function sendChatbotMessage(rawMessage) {
 }
 
 function createChatbotWidget() {
+    // Izveido čatbota HTML elementus, ja šajā lapā čatbots ir atļauts.
     if (isChatbotDisabledPage()) {
         return;
     }
@@ -559,6 +570,7 @@ function createChatbotWidget() {
 }
 
 async function fetchSessionUser() {
+    // Ielādē pašreizējo lietotāju un atkārtoti izmanto to pašu pieprasījumu.
     if (!sessionUserPromise) {
         sessionUserPromise = fetch("/api/me", {
             headers: {
@@ -628,6 +640,7 @@ function ensureDoctorRegistrationButton() {
 }
 
 async function updateSessionNavigation() {
+    // Pielāgo navigāciju pēc tā, vai lietotājs ir ielogojies.
     const account = await fetchSessionUser();
     syncChatbotSession(account);
 
@@ -648,6 +661,7 @@ async function updateSessionNavigation() {
 }
 
 function setDarkMode(isDark) {
+    // Pārslēdz tumšo režīmu un saglabā izvēli localStorage.
     document.body.classList.toggle("dark-mode", isDark);
 
     const toggleButton = document.getElementById("dark-mode-btn");
@@ -659,6 +673,7 @@ function setDarkMode(isDark) {
 }
 
 function animateCountupValue(element) {
+    // Animē skaitītājus sākumlapā no nulles līdz mērķa vērtībai.
     const target = Number(element.dataset.countupTarget || "0");
     const suffix = element.dataset.countupSuffix || "";
 
